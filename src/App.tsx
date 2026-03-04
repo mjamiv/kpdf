@@ -38,7 +38,7 @@ type DraftRect = {
 
 type Draft = DraftPen | DraftRect | null;
 
-const toolLabels: Record<Tool, string> = {
+const toolLabels: Partial<Record<Tool, string>> = {
   pen: 'Pen',
   rectangle: 'Rectangle',
   highlight: 'Highlight',
@@ -312,7 +312,7 @@ export default function App() {
       return;
     }
 
-    setDraft({ type: tool, start: point, end: point });
+    setDraft({ type: tool as 'rectangle' | 'highlight', start: point, end: point });
   };
 
   const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
