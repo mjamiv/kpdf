@@ -157,6 +157,9 @@ export function annotationReducer(state: DocumentState, action: Action): Documen
       return setPage(state, action.page, page.filter((a) => a.locked));
     }
 
+    case 'RESET_STATE':
+      return { annotationsByPage: action.annotationsByPage };
+
     default:
       return state;
   }
@@ -226,6 +229,9 @@ export function computeInverse(state: DocumentState, action: Action): Action {
       const removed = action.removed ?? page.filter((a) => !a.locked);
       return { type: 'BATCH', actions: removed.map((a) => ({ type: 'ADD_ANNOTATION' as const, page: action.page, annotation: a })) };
     }
+
+    case 'RESET_STATE':
+      return { type: 'RESET_STATE', annotationsByPage: state.annotationsByPage };
 
     default:
       return action;

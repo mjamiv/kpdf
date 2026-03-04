@@ -20,7 +20,7 @@ import { exportPdf, type ExportPersistenceResult } from './pdfExport';
 import type { Annotation, AnnotationsByPage, AnchorPosition, Point, Tool } from './types';
 import { annotationReducer, computeInverse, type DocumentState } from './engine/state';
 import type { Action } from './engine/actions';
-import { createUndoStack } from './engine/history';
+import { createUndoStack, type UndoStack } from './engine/history';
 import { clamp01, nextZIndex, randomId, sortedAnnotations } from './engine/utils';
 import { createSelectionState, deselectAll, type SelectionState } from './engine/selection';
 import { getTool } from './tools';
@@ -28,6 +28,16 @@ import { getToolForKey, TOOL_SHORTCUTS } from './tools/shortcuts';
 import SelectionHandles from './components/SelectionHandles';
 import ShortcutHelpPanel from './components/ShortcutHelpPanel';
 import StatusBar from './components/StatusBar';
+import TabBar from './components/TabBar';
+import type { DocumentTab } from './workflow/documentStore';
+import { createDocumentTab } from './workflow/documentStore';
+
+type TabData = {
+  pdfDoc: PDFDocumentProxy;
+  sourceBytes: Uint8Array;
+  history: UndoStack;
+  author: string;
+};
 
 GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -199,14 +209,11 @@ export default function App() {
   const activeRenderRef = useRef<{ cancel: () => void } | null>(null);
   const historyRef = useRef(createUndoStack());
   const draftRef = useRef<unknown>(null);
+  const tabDataRef = useRef<Map<string, TabData>>(new Map());
 
-  const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
-  const [documentFingerprint, setDocumentFingerprint] = useState('');
-  const [sourceBytes, setSourceBytes] = useState<Uint8Array | null>(null);
-  const [fileName, setFileName] = useState('');
-  const [pageNumber, setPageNumber] = useState(1);
-  const [pageCount, setPageCount] = useState(0);
-  const [zoom, setZoom] = useState(1);
+  const [tabs, setTabs] = useState<DocumentTab[]>([]);
+  const [activeTabId, setActiveTabId] = useState('');
+
   const [tool, setTool] = useState<Tool>('pen');
   const [color, setColor] = useState('#ef4444');
   const [author, setAuthor] = useState('local-user');
@@ -219,7 +226,34 @@ export default function App() {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [canvasRect, setCanvasRect] = useState<DOMRect | null>(null);
 
+  const activeTab = tabs.find((t) => t.id === activeTabId);
+  const pdfDoc = activeTab ? tabDataRef.current.get(activeTab.id)?.pdfDoc ?? null : null;
+  const sourceBytes = activeTab ? tabDataRef.current.get(activeTab.id)?.sourceBytes ?? null : null;
+  const documentFingerprint = activeTab?.fingerprint ?? '';
+  const fileName = activeTab?.fileName ?? '';
+  const pageNumber = activeTab?.pageNumber ?? 1;
+  const pageCount = activeTab?.pageCount ?? 0;
+  const zoom = activeTab?.zoom ?? 1;
+
   const { annotationsByPage } = state;
+
+  const updateActiveTab = useCallback((updater: (tab: DocumentTab) => DocumentTab) => {
+    setTabs((prev) => prev.map((t) => t.id === activeTabId ? updater(t) : t));
+  }, [activeTabId]);
+
+  const setPageNumber = useCallback((v: number | ((prev: number) => number)) => {
+    updateActiveTab((t) => {
+      const next = typeof v === 'function' ? v(t.pageNumber) : v;
+      return { ...t, pageNumber: next };
+    });
+  }, [updateActiveTab]);
+
+  const setZoom = useCallback((v: number | ((prev: number) => number)) => {
+    updateActiveTab((t) => {
+      const next = typeof v === 'function' ? v(t.zoom) : v;
+      return { ...t, zoom: next };
+    });
+  }, [updateActiveTab]);
 
   const setDraft = useCallback((value: unknown | ((prev: unknown) => unknown)) => {
     if (typeof value === 'function') {
@@ -241,7 +275,9 @@ export default function App() {
     const inverse = computeInverse(stateRef.current, action);
     historyRef.current.push({ forward: action, inverse, timestamp: Date.now(), coalesceKey });
     dispatchRaw(action);
-  }, []);
+    // Mark active tab dirty
+    setTabs((prev) => prev.map((t) => t.id === activeTabId ? { ...t, dirty: true } : t));
+  }, [activeTabId]);
 
   const dispatchSilent = useCallback((action: Action) => { dispatchRaw(action); }, []);
 
@@ -260,7 +296,13 @@ export default function App() {
     if (!pdfDoc || !documentFingerprint) return;
     const doc = createAnnotationDocument(annotationsByPage, author, documentFingerprint);
     saveAnnotationsToLocalStorage(documentFingerprint, doc);
-  }, [annotationsByPage, author, documentFingerprint, pdfDoc]);
+    // Keep tab's annotationsByPage in sync
+    if (activeTabId) {
+      setTabs((prev) => prev.map((t) =>
+        t.id === activeTabId ? { ...t, annotationsByPage } : t
+      ));
+    }
+  }, [annotationsByPage, author, documentFingerprint, pdfDoc, activeTabId]);
 
   useEffect(() => {
     if (!pdfDoc) return;
@@ -377,6 +419,55 @@ export default function App() {
 
   const handleHandleDown = useCallback((_anchor: AnchorPosition, e: React.PointerEvent) => { e.preventDefault(); }, []);
 
+  const switchToTab = useCallback((tabId: string) => {
+    if (tabId === activeTabId) return;
+    // Save current tab state
+    if (activeTabId) {
+      const oldData = tabDataRef.current.get(activeTabId);
+      if (oldData) oldData.history = historyRef.current;
+      setTabs((prev) => prev.map((t) =>
+        t.id === activeTabId ? { ...t, annotationsByPage: state.annotationsByPage } : t
+      ));
+    }
+    // Restore new tab state
+    setActiveTabId(tabId);
+    const newTab = tabs.find((t) => t.id === tabId);
+    const newData = tabDataRef.current.get(tabId);
+    if (newTab && newData) {
+      dispatchRaw({ type: 'RESET_STATE', annotationsByPage: newTab.annotationsByPage });
+      historyRef.current = newData.history;
+      setAuthor(newData.author);
+    }
+    setDraft(null);
+    setSelection(deselectAll());
+  }, [activeTabId, tabs, state.annotationsByPage, setDraft]);
+
+  const closeTab = useCallback((tabId: string) => {
+    const tabData = tabDataRef.current.get(tabId);
+    tabData?.pdfDoc.destroy();
+    tabDataRef.current.delete(tabId);
+    setTabs((prev) => {
+      const remaining = prev.filter((t) => t.id !== tabId);
+      if (tabId === activeTabId && remaining.length > 0) {
+        const newActive = remaining[0];
+        setActiveTabId(newActive.id);
+        const newData = tabDataRef.current.get(newActive.id);
+        if (newData) {
+          dispatchRaw({ type: 'RESET_STATE', annotationsByPage: newActive.annotationsByPage });
+          historyRef.current = newData.history;
+          setAuthor(newData.author);
+        }
+      } else if (remaining.length === 0) {
+        setActiveTabId('');
+        dispatchRaw({ type: 'RESET_STATE', annotationsByPage: {} });
+        historyRef.current = createUndoStack();
+      }
+      return remaining;
+    });
+    setDraft(null);
+    setSelection(deselectAll());
+  }, [activeTabId, setDraft]);
+
   const loadPdf = async (bytes: Uint8Array, name: string) => {
     setIsBusy(true);
     setStatus('Loading PDF...');
@@ -393,27 +484,40 @@ export default function App() {
     const local = loadAnnotationsFromLocalStorage(fingerprint);
     let loadedAnnotations: AnnotationsByPage = {};
     let loadedSource = 'empty';
+    let loadedAuthor = 'local-user';
     if (embedded) {
       loadedAnnotations = toAnnotationsByPage(embedded);
-      setAuthor(embedded.exportedBy || 'local-user');
+      loadedAuthor = embedded.exportedBy || 'local-user';
       loadedSource = embeddedAttachment ? 'embedded attachment' : 'legacy embedded metadata';
     } else if (local) {
       loadedAnnotations = toAnnotationsByPage(local);
-      setAuthor(local.exportedBy || 'local-user');
+      loadedAuthor = local.exportedBy || 'local-user';
       loadedSource = 'local autosave';
     }
-    setPdfDoc(doc);
-    setDocumentFingerprint(fingerprint);
-    setSourceBytes(bytes);
-    setFileName(name);
-    setPageCount(doc.numPages);
-    setPageNumber(1);
-    setZoom(1);
-    // Load annotations into reducer
-    for (const [pageKey, anns] of Object.entries(loadedAnnotations)) {
-      dispatchRaw({ type: 'LOAD_PAGE', page: Number(pageKey), annotations: anns });
+
+    // Save current tab state before switching
+    if (activeTabId) {
+      const oldData = tabDataRef.current.get(activeTabId);
+      if (oldData) oldData.history = historyRef.current;
+      setTabs((prev) => prev.map((t) =>
+        t.id === activeTabId ? { ...t, annotationsByPage: state.annotationsByPage } : t
+      ));
     }
-    historyRef.current.clear();
+
+    // Create new tab
+    const tabId = randomId();
+    const newTab = createDocumentTab(tabId, name, fingerprint, doc.numPages);
+    newTab.annotationsByPage = loadedAnnotations;
+    const newHistory = createUndoStack();
+    tabDataRef.current.set(tabId, { pdfDoc: doc, sourceBytes: bytes, history: newHistory, author: loadedAuthor });
+
+    setTabs((prev) => [...prev, newTab]);
+    setActiveTabId(tabId);
+    setAuthor(loadedAuthor);
+    historyRef.current = newHistory;
+
+    // Load annotations into reducer
+    dispatchRaw({ type: 'RESET_STATE', annotationsByPage: loadedAnnotations });
     setDraft(null);
     setSelection(deselectAll());
     setStatus(`Loaded ${name} (${doc.numPages} pages) with ${loadedSource}.`);
@@ -481,6 +585,7 @@ export default function App() {
         return 'Saved editable PDF + sidecar JSON.';
       };
       setStatus(msg(output.persistence));
+      setTabs((prev) => prev.map((t) => t.id === activeTabId ? { ...t, dirty: false } : t));
       setIsBusy(false);
     } catch (e) { setStatus(`Save error: ${(e as Error).message}`); setIsBusy(false); }
   };
@@ -532,6 +637,7 @@ export default function App() {
         <span>{pageNumber} / {pageCount || 0}</span>
         <button onClick={() => { setDraft(null); setPageNumber((v) => Math.min(pageCount, v + 1)); }} disabled={!pdfDoc || pageNumber >= pageCount}>Next</button>
       </header>
+      <TabBar tabs={tabs} activeTabId={activeTabId} onSelectTab={switchToTab} onCloseTab={closeTab} />
       <main className="canvas-shell">
         {!pdfDoc ? (
           <div className="empty-state"><h1>KPDF Markup</h1><p>Open or drop a PDF to start marking up.</p></div>

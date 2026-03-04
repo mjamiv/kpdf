@@ -11,4 +11,5 @@ export type Action =
   | { type: 'LOCK_ANNOTATION'; page: number; id: string; locked: boolean }
   | { type: 'BATCH'; actions: Action[] }
   | { type: 'LOAD_PAGE'; page: number; annotations: Annotation[] }
-  | { type: 'CLEAR_PAGE'; page: number; removed?: Annotation[] };
+  | { type: 'CLEAR_PAGE'; page: number; removed?: Annotation[] }
+  | { type: 'RESET_STATE'; annotationsByPage: Record<number, Annotation[]> };
