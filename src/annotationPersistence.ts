@@ -1,4 +1,4 @@
-import type { Annotation, AnnotationDocumentV2, AnnotationsByPage } from './types';
+import type { Annotation, AnnotationDocumentV2, AnnotationsByPage, ArrowAnnotation, CalloutAnnotation, CloudAnnotation, MeasurementAnnotation, PolygonAnnotation, StampAnnotation } from './types';
 
 export const SCHEMA_VERSION = 2;
 export const PDF_METADATA_PREFIX = 'KPDF_ANN_V2:';
@@ -84,6 +84,45 @@ function isAnnotation(value: unknown): value is Annotation {
   if (annotation.type === 'text') {
     return [annotation.x, annotation.y, annotation.fontSize]
       .every((field) => typeof field === 'number') && typeof annotation.text === 'string';
+  }
+
+  if (annotation.type === 'arrow') {
+    const a = annotation as Partial<ArrowAnnotation>;
+    return isPoint(a.start) && isPoint(a.end)
+      && typeof a.thickness === 'number' && typeof a.headSize === 'number';
+  }
+
+  if (annotation.type === 'callout') {
+    const a = annotation as Partial<CalloutAnnotation>;
+    return a.box !== null && typeof a.box === 'object'
+      && typeof (a.box as Record<string, unknown>).x === 'number'
+      && typeof (a.box as Record<string, unknown>).y === 'number'
+      && typeof (a.box as Record<string, unknown>).width === 'number'
+      && typeof (a.box as Record<string, unknown>).height === 'number'
+      && isPoint(a.leaderTarget) && typeof a.text === 'string' && typeof a.fontSize === 'number';
+  }
+
+  if (annotation.type === 'cloud') {
+    const a = annotation as Partial<CloudAnnotation>;
+    return [a.x, a.y, a.width, a.height].every((f) => typeof f === 'number');
+  }
+
+  if (annotation.type === 'measurement') {
+    const a = annotation as Partial<MeasurementAnnotation>;
+    return isPoint(a.start) && isPoint(a.end)
+      && typeof a.thickness === 'number' && typeof a.scale === 'number' && typeof a.unit === 'string';
+  }
+
+  if (annotation.type === 'polygon') {
+    const a = annotation as Partial<PolygonAnnotation>;
+    return Array.isArray(a.points) && a.points.every(isPoint)
+      && typeof a.closed === 'boolean' && typeof a.thickness === 'number';
+  }
+
+  if (annotation.type === 'stamp') {
+    const a = annotation as Partial<StampAnnotation>;
+    return [a.x, a.y, a.width, a.height].every((f) => typeof f === 'number')
+      && typeof a.stampId === 'string' && typeof a.label === 'string';
   }
 
   return false;

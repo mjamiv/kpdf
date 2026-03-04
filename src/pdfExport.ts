@@ -123,6 +123,161 @@ function drawAnnotations(
         break;
       }
 
+      case 'arrow': {
+        const aStart = toPdfPoint(annotation.start, width, height);
+        const aEnd = toPdfPoint(annotation.end, width, height);
+        const aThickness = Math.max(annotation.thickness * width, 0.5);
+
+        page.drawLine({ start: aStart, end: aEnd, thickness: aThickness, color });
+
+        // Draw arrowhead
+        const dx = aEnd.x - aStart.x;
+        const dy = aEnd.y - aStart.y;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        if (len > 0) {
+          const headLen = annotation.headSize * width;
+          const ux = dx / len;
+          const uy = dy / len;
+          const headAngle = Math.PI / 6;
+          const cos = Math.cos(headAngle);
+          const sin = Math.sin(headAngle);
+
+          page.drawLine({
+            start: aEnd,
+            end: { x: aEnd.x - headLen * (ux * cos + uy * sin), y: aEnd.y - headLen * (-ux * sin + uy * cos) },
+            thickness: aThickness,
+            color,
+          });
+          page.drawLine({
+            start: aEnd,
+            end: { x: aEnd.x - headLen * (ux * cos - uy * sin), y: aEnd.y - headLen * (ux * sin + uy * cos) },
+            thickness: aThickness,
+            color,
+          });
+        }
+        break;
+      }
+
+      case 'callout': {
+        const box = annotation.box;
+        const cX = clamp01(box.x) * width;
+        const cW = clamp01(box.width) * width;
+        const cH = clamp01(box.height) * height;
+        const cYTop = clamp01(box.y) * height;
+        const cY = height - cYTop - cH;
+
+        page.drawRectangle({
+          x: cX,
+          y: cY,
+          width: cW,
+          height: cH,
+          borderColor: color,
+          borderWidth: 1,
+          opacity: 0,
+        });
+
+        const boxCenter = toPdfPoint(
+          { x: box.x + box.width / 2, y: box.y + box.height / 2 },
+          width,
+          height,
+        );
+        const leader = toPdfPoint(annotation.leaderTarget, width, height);
+        page.drawLine({ start: boxCenter, end: leader, thickness: 1, color });
+
+        const textSize = Math.max(annotation.fontSize * width, 8);
+        page.drawText(annotation.text, {
+          x: cX + 2,
+          y: cY + cH / 2 - textSize / 2,
+          color,
+          size: textSize,
+        });
+        break;
+      }
+
+      case 'cloud': {
+        const clX = clamp01(annotation.x) * width;
+        const clW = clamp01(annotation.width) * width;
+        const clH = clamp01(annotation.height) * height;
+        const clYTop = clamp01(annotation.y) * height;
+        const clY = height - clYTop - clH;
+
+        page.drawRectangle({
+          x: clX,
+          y: clY,
+          width: clW,
+          height: clH,
+          borderColor: color,
+          borderWidth: 1,
+          opacity: 0,
+        });
+        break;
+      }
+
+      case 'measurement': {
+        const mStart = toPdfPoint(annotation.start, width, height);
+        const mEnd = toPdfPoint(annotation.end, width, height);
+        const mThickness = Math.max(annotation.thickness * width, 0.5);
+
+        page.drawLine({ start: mStart, end: mEnd, thickness: mThickness, color });
+
+        const mdx = annotation.end.x - annotation.start.x;
+        const mdy = annotation.end.y - annotation.start.y;
+        const dist = Math.sqrt(mdx * mdx + mdy * mdy) * annotation.scale;
+        const label = `${dist.toFixed(2)} ${annotation.unit}`;
+        const mid = toPdfPoint(
+          { x: (annotation.start.x + annotation.end.x) / 2, y: (annotation.start.y + annotation.end.y) / 2 },
+          width,
+          height,
+        );
+        page.drawText(label, { x: mid.x, y: mid.y + 4, color, size: 10 });
+        break;
+      }
+
+      case 'polygon': {
+        const pSegments = toLineSegments(annotation.points);
+        const pThickness = Math.max(annotation.thickness * width, 0.5);
+
+        pSegments.forEach((seg) => {
+          const pStart = toPdfPoint(seg.start, width, height);
+          const pEnd = toPdfPoint(seg.end, width, height);
+          page.drawLine({ start: pStart, end: pEnd, thickness: pThickness, color });
+        });
+
+        if (annotation.closed && annotation.points.length >= 3) {
+          const first = toPdfPoint(annotation.points[0], width, height);
+          const last = toPdfPoint(annotation.points[annotation.points.length - 1], width, height);
+          page.drawLine({ start: last, end: first, thickness: pThickness, color });
+        }
+        break;
+      }
+
+      case 'stamp': {
+        const sX = clamp01(annotation.x) * width;
+        const sW = clamp01(annotation.width) * width;
+        const sH = clamp01(annotation.height) * height;
+        const sYTop = clamp01(annotation.y) * height;
+        const sY = height - sYTop - sH;
+
+        page.drawRectangle({
+          x: sX,
+          y: sY,
+          width: sW,
+          height: sH,
+          borderColor: color,
+          borderWidth: 1,
+          opacity: 0,
+        });
+
+        const sTextSize = Math.max(Math.min(sW / Math.max(annotation.label.length, 1) * 1.5, sH * 0.6), 8);
+        page.drawText(annotation.label, {
+          x: sX + sW / 2 - (annotation.label.length * sTextSize * 0.3),
+          y: sY + sH / 2 - sTextSize / 2,
+          color,
+          size: sTextSize,
+        });
+        break;
+      }
+
       default:
         break;
     }
