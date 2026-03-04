@@ -1,0 +1,127 @@
+:root {
+  --bg: #f3f4f6;
+  --panel: #ffffff;
+  --line: #d1d5db;
+  --text: #111827;
+  --muted: #4b5563;
+  --accent: #0f766e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.app {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  background: radial-gradient(circle at top right, #e0f2fe, #f3f4f6 45%);
+  color: var(--text);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid var(--line);
+  background: #ffffffde;
+  backdrop-filter: blur(6px);
+}
+
+button,
+.color {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 0.45rem;
+  height: 2rem;
+  padding: 0 0.7rem;
+  font-weight: 600;
+}
+
+.toggle-row,
+.author-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.author-input {
+  border: 1px solid var(--line);
+  border-radius: 0.45rem;
+  height: 2rem;
+  padding: 0 0.45rem;
+  min-width: 7rem;
+}
+
+button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.divider {
+  width: 1px;
+  height: 1.3rem;
+  background: var(--line);
+}
+
+.color {
+  width: 2.3rem;
+  padding: 0.2rem;
+}
+
+.canvas-shell {
+  overflow: auto;
+  display: grid;
+  place-items: start center;
+  padding: 1rem;
+}
+
+.page-wrap {
+  position: relative;
+  width: fit-content;
+  height: fit-content;
+  background: white;
+  box-shadow: 0 10px 40px #11182724;
+}
+
+.pdf-canvas,
+.overlay-canvas {
+  display: block;
+}
+
+.overlay-canvas {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+}
+
+.empty-state {
+  margin-top: 14vh;
+  text-align: center;
+  color: var(--muted);
+}
+
+.empty-state h1 {
+  margin: 0;
+  font-size: 1.8rem;
+  color: var(--text);
+}
+
+.status-line {
+  border-top: 1px solid var(--line);
+  padding: 0.6rem 1rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+  background: #ffffffcf;
+}
