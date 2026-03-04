@@ -1,6 +1,7 @@
 import type { AnnotationsByPage, Annotation } from '../types';
 import type { Action } from './actions';
 import { nextZIndex } from './utils';
+import { moveAnnotation, resizeAnnotation, rotateAnnotation } from './transforms';
 
 export type DocumentState = {
   annotationsByPage: AnnotationsByPage;
@@ -48,15 +49,21 @@ export function annotationReducer(state: DocumentState, action: Action): Documen
         action.page,
         page.map((a) => {
           if (a.id !== action.id) return a;
-          // For now just return the annotation unchanged - transforms will handle actual math later
-          return a;
+          return moveAnnotation(a, action.dx, action.dy);
         }),
       );
     }
 
     case 'RESIZE_ANNOTATION': {
-      // Transforms will handle the actual math later
-      return state;
+      const page = getPage(state, action.page);
+      return setPage(
+        state,
+        action.page,
+        page.map((a) => {
+          if (a.id !== action.id) return a;
+          return resizeAnnotation(a, action.anchor, action.dx, action.dy);
+        }),
+      );
     }
 
     case 'ROTATE_ANNOTATION': {
@@ -64,7 +71,10 @@ export function annotationReducer(state: DocumentState, action: Action): Documen
       return setPage(
         state,
         action.page,
-        page.map((a) => (a.id === action.id ? { ...a, rotation: action.angle } as Annotation : a)),
+        page.map((a) => {
+          if (a.id !== action.id) return a;
+          return rotateAnnotation(a, action.angle);
+        }),
       );
     }
 

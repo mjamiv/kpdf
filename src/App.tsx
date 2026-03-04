@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { GlobalWorkerOptions, getDocument, type PDFDocumentProxy } from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import './App.css';
@@ -17,72 +17,31 @@ import {
   toAnnotationsByPage,
 } from './annotationPersistence';
 import { exportPdf, type ExportPersistenceResult } from './pdfExport';
-import type { Annotation, AnnotationsByPage, Point, Tool } from './types';
+import type { Annotation, AnnotationsByPage, AnchorPosition, Point, Tool } from './types';
+import { annotationReducer, computeInverse, type DocumentState } from './engine/state';
+import type { Action } from './engine/actions';
+import { createUndoStack } from './engine/history';
+import { clamp01, nextZIndex, randomId, sortedAnnotations } from './engine/utils';
+import { createSelectionState, deselectAll, type SelectionState } from './engine/selection';
+import { getTool } from './tools';
+import { getToolForKey, TOOL_SHORTCUTS } from './tools/shortcuts';
+import SelectionHandles from './components/SelectionHandles';
+import ShortcutHelpPanel from './components/ShortcutHelpPanel';
+import StatusBar from './components/StatusBar';
 
 GlobalWorkerOptions.workerSrc = workerUrl;
 
 const BASE_RENDER_SCALE = 1.4;
-const PEN_THICKNESS = 0.0025;
-const FONT_SIZE = 0.018;
-
-type DraftPen = {
-  type: 'pen';
-  points: Point[];
-};
-
-type DraftRect = {
-  type: 'rectangle' | 'highlight';
-  start: Point;
-  end: Point;
-};
-
-type Draft = DraftPen | DraftRect | null;
-
-const toolLabels: Partial<Record<Tool, string>> = {
-  pen: 'Pen',
-  rectangle: 'Rectangle',
-  highlight: 'Highlight',
-  text: 'Text',
-};
-
-function clamp01(value: number): number {
-  if (value < 0) return 0;
-  if (value > 1) return 1;
-  return value;
-}
-
-function randomId(): string {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
-}
-
-function normalizeRect(start: Point, end: Point) {
-  const x = Math.min(start.x, end.x);
-  const y = Math.min(start.y, end.y);
-
-  return {
-    x,
-    y,
-    width: Math.abs(end.x - start.x),
-    height: Math.abs(end.y - start.y),
-  };
-}
-
-function nextZIndex(annotations: Annotation[]): number {
-  return annotations.reduce((max, annotation) => Math.max(max, annotation.zIndex), 0) + 1;
-}
 
 function baseName(fileName: string): string {
   return fileName.replace(/\.pdf$/i, '') || 'document';
 }
 
-function sortedAnnotations(annotations: Annotation[]): Annotation[] {
-  return [...annotations].sort((a, b) => a.zIndex - b.zIndex);
-}
-
 function drawAnnotations(
   canvas: HTMLCanvasElement,
   annotations: Annotation[],
-  draft: Draft,
+  draft: unknown,
+  activeTool: Tool,
 ) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -106,61 +65,131 @@ function drawAnnotations(
   };
 
   const drawRect = (
-    annotation: Pick<Annotation, 'type' | 'color'> & { x: number; y: number; width: number; height: number; thickness: number },
+    annotation: { type: string; color: string; x: number; y: number; width: number; height: number; thickness: number },
   ) => {
     const x = annotation.x * w;
     const y = annotation.y * h;
-    const width = annotation.width * w;
-    const height = annotation.height * h;
-
+    const rw = annotation.width * w;
+    const rh = annotation.height * h;
     if (annotation.type === 'highlight') {
       ctx.save();
       ctx.fillStyle = annotation.color;
       ctx.globalAlpha = 0.2;
-      ctx.fillRect(x, y, width, height);
+      ctx.fillRect(x, y, rw, rh);
       ctx.restore();
       return;
     }
-
     ctx.strokeStyle = annotation.color;
     ctx.lineWidth = Math.max(annotation.thickness * w, 1.5);
-    ctx.strokeRect(x, y, width, height);
+    ctx.strokeRect(x, y, rw, rh);
   };
 
-  sortedAnnotations(annotations).forEach((annotation) => {
-    switch (annotation.type) {
+  const drawArrowShape = (start: Point, end: Point, color: string, thickness: number, headSize: number) => {
+    const sx = start.x * w, sy = start.y * h;
+    const ex = end.x * w, ey = end.y * h;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(thickness * w, 1.5);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+    const angle = Math.atan2(ey - sy, ex - sx);
+    const hl = headSize * w;
+    ctx.beginPath();
+    ctx.moveTo(ex - hl * Math.cos(angle - Math.PI / 6), ey - hl * Math.sin(angle - Math.PI / 6));
+    ctx.lineTo(ex, ey);
+    ctx.lineTo(ex - hl * Math.cos(angle + Math.PI / 6), ey - hl * Math.sin(angle + Math.PI / 6));
+    ctx.stroke();
+  };
+
+  const drawStampShape = (x: number, y: number, sw: number, sh: number, label: string, color: string) => {
+    const px = x * w, py = y * h, pw = sw * w, ph = sh * h;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(px, py, pw, ph);
+    ctx.fillStyle = color;
+    ctx.font = `bold ${Math.max(12, ph * 0.6)}px ui-sans-serif, system-ui`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, px + pw / 2, py + ph / 2);
+    ctx.textAlign = 'start';
+    ctx.textBaseline = 'alphabetic';
+  };
+
+  sortedAnnotations(annotations).forEach((ann) => {
+    switch (ann.type) {
       case 'pen':
-        drawPen(annotation.points, annotation.color, annotation.thickness);
+        drawPen(ann.points, ann.color, ann.thickness);
         break;
       case 'rectangle':
       case 'highlight':
-        drawRect(annotation);
+        drawRect(ann);
         break;
       case 'text':
-        ctx.fillStyle = annotation.color;
-        ctx.font = `${Math.max(annotation.fontSize * w, 12)}px ui-sans-serif, system-ui, -apple-system`;
-        ctx.fillText(annotation.text, annotation.x * w, annotation.y * h);
+        ctx.fillStyle = ann.color;
+        ctx.font = `${Math.max(ann.fontSize * w, 12)}px ui-sans-serif, system-ui, -apple-system`;
+        ctx.fillText(ann.text, ann.x * w, ann.y * h);
         break;
-      default:
+      case 'arrow':
+        drawArrowShape(ann.start, ann.end, ann.color, ann.thickness, ann.headSize);
         break;
+      case 'measurement': {
+        const sx = ann.start.x * w, sy = ann.start.y * h;
+        const ex = ann.end.x * w, ey = ann.end.y * h;
+        ctx.strokeStyle = ann.color;
+        ctx.lineWidth = Math.max(ann.thickness * w, 1.5);
+        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
+        const dist = Math.sqrt((ann.end.x - ann.start.x) ** 2 + (ann.end.y - ann.start.y) ** 2) * ann.scale;
+        ctx.fillStyle = ann.color;
+        ctx.font = `${Math.max(12, 0.014 * w)}px ui-sans-serif, system-ui`;
+        ctx.fillText(`${dist.toFixed(1)} ${ann.unit}`, (sx + ex) / 2 + 4, (sy + ey) / 2 - 4);
+        break;
+      }
+      case 'cloud': {
+        const cx = ann.x * w, cy = ann.y * h, cw = ann.width * w, ch = ann.height * h;
+        ctx.strokeStyle = ann.color;
+        ctx.lineWidth = Math.max(0.0025 * w, 1.5);
+        ctx.strokeRect(cx, cy, cw, ch);
+        break;
+      }
+      case 'polygon':
+        if (ann.points.length >= 2) {
+          ctx.strokeStyle = ann.color;
+          ctx.lineWidth = Math.max(ann.thickness * w, 1.5);
+          ctx.lineJoin = 'round';
+          ctx.beginPath();
+          ctx.moveTo(ann.points[0].x * w, ann.points[0].y * h);
+          for (let i = 1; i < ann.points.length; i++) ctx.lineTo(ann.points[i].x * w, ann.points[i].y * h);
+          if (ann.closed) ctx.closePath();
+          ctx.stroke();
+          if (ann.closed) { ctx.save(); ctx.fillStyle = ann.color; ctx.globalAlpha = 0.1; ctx.fill(); ctx.restore(); }
+        }
+        break;
+      case 'stamp':
+        drawStampShape(ann.x, ann.y, ann.width, ann.height, ann.label, ann.color);
+        break;
+      case 'callout': {
+        const bx = ann.box.x * w, by = ann.box.y * h, bw = ann.box.width * w, bh = ann.box.height * h;
+        ctx.strokeStyle = ann.color;
+        ctx.lineWidth = Math.max(0.0025 * w, 1.5);
+        ctx.strokeRect(bx, by, bw, bh);
+        ctx.beginPath(); ctx.moveTo(bx, by + bh / 2); ctx.lineTo(ann.leaderTarget.x * w, ann.leaderTarget.y * h); ctx.stroke();
+        ctx.fillStyle = ann.color;
+        ctx.font = `${Math.max(10, ann.fontSize * w)}px ui-sans-serif, system-ui`;
+        ctx.fillText(ann.text, bx + 4, by + bh / 2 + 4, bw - 8);
+        break;
+      }
     }
   });
 
-  if (!draft) return;
-
-  if (draft.type === 'pen') {
-    drawPen(draft.points, '#111827', PEN_THICKNESS);
-    return;
+  if (draft) {
+    const toolBehavior = getTool(activeTool);
+    toolBehavior?.renderDraft?.(ctx, draft, w, h);
   }
-
-  const rect = normalizeRect(draft.start, draft.end);
-  drawRect({
-    ...rect,
-    type: draft.type,
-    color: '#111827',
-    thickness: PEN_THICKNESS,
-  });
 }
+
+const initialState: DocumentState = { annotationsByPage: {} };
 
 export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -168,11 +197,13 @@ export default function App() {
   const pdfCanvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const activeRenderRef = useRef<{ cancel: () => void } | null>(null);
+  const historyRef = useRef(createUndoStack());
+  const draftRef = useRef<unknown>(null);
 
   const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
-  const [documentFingerprint, setDocumentFingerprint] = useState<string>('');
+  const [documentFingerprint, setDocumentFingerprint] = useState('');
   const [sourceBytes, setSourceBytes] = useState<Uint8Array | null>(null);
-  const [fileName, setFileName] = useState<string>('');
+  const [fileName, setFileName] = useState('');
   const [pageNumber, setPageNumber] = useState(1);
   const [pageCount, setPageCount] = useState(0);
   const [zoom, setZoom] = useState(1);
@@ -180,10 +211,39 @@ export default function App() {
   const [color, setColor] = useState('#ef4444');
   const [author, setAuthor] = useState('local-user');
   const [flattenOnSave, setFlattenOnSave] = useState(false);
-  const [annotationsByPage, setAnnotationsByPage] = useState<AnnotationsByPage>({});
-  const [draft, setDraft] = useState<Draft>(null);
+  const [state, dispatchRaw] = useReducer(annotationReducer, initialState);
+  const [draft, setDraftState] = useState<unknown>(null);
+  const [selection, setSelection] = useState<SelectionState>(createSelectionState);
   const [isBusy, setIsBusy] = useState(false);
   const [status, setStatus] = useState('Drop a PDF or click Open PDF.');
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const [canvasRect, setCanvasRect] = useState<DOMRect | null>(null);
+
+  const { annotationsByPage } = state;
+
+  const setDraft = useCallback((value: unknown | ((prev: unknown) => unknown)) => {
+    if (typeof value === 'function') {
+      setDraftState((prev: unknown) => {
+        const next = (value as (p: unknown) => unknown)(prev);
+        draftRef.current = next;
+        return next;
+      });
+    } else {
+      draftRef.current = value;
+      setDraftState(value);
+    }
+  }, []);
+
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  const dispatch = useCallback((action: Action, coalesceKey?: string) => {
+    const inverse = computeInverse(stateRef.current, action);
+    historyRef.current.push({ forward: action, inverse, timestamp: Date.now(), coalesceKey });
+    dispatchRaw(action);
+  }, []);
+
+  const dispatchSilent = useCallback((action: Action) => { dispatchRaw(action); }, []);
 
   const currentAnnotations = useMemo(
     () => sortedAnnotations(annotationsByPage[pageNumber] ?? []),
@@ -193,201 +253,137 @@ export default function App() {
   useEffect(() => {
     const overlay = overlayCanvasRef.current;
     if (!overlay) return;
-
-    drawAnnotations(overlay, currentAnnotations, draft);
-  }, [currentAnnotations, draft]);
+    drawAnnotations(overlay, currentAnnotations, draft, tool);
+  }, [currentAnnotations, draft, tool]);
 
   useEffect(() => {
     if (!pdfDoc || !documentFingerprint) return;
-
     const doc = createAnnotationDocument(annotationsByPage, author, documentFingerprint);
     saveAnnotationsToLocalStorage(documentFingerprint, doc);
   }, [annotationsByPage, author, documentFingerprint, pdfDoc]);
 
   useEffect(() => {
     if (!pdfDoc) return;
-
     let isCurrent = true;
-
     const renderPage = async () => {
       const pdfCanvas = pdfCanvasRef.current;
       const overlayCanvas = overlayCanvasRef.current;
       if (!pdfCanvas || !overlayCanvas) return;
-
       activeRenderRef.current?.cancel();
       setIsBusy(true);
-
       const page = await pdfDoc.getPage(pageNumber);
       const viewport = page.getViewport({ scale: BASE_RENDER_SCALE * zoom });
-
       pdfCanvas.width = Math.round(viewport.width);
       pdfCanvas.height = Math.round(viewport.height);
       overlayCanvas.width = pdfCanvas.width;
       overlayCanvas.height = pdfCanvas.height;
-
+      setCanvasRect(overlayCanvas.getBoundingClientRect());
       const context = pdfCanvas.getContext('2d');
       if (!context) return;
-
       const renderTask = page.render({ canvasContext: context, viewport, canvas: pdfCanvas });
       activeRenderRef.current = renderTask;
-
-      try {
-        await renderTask.promise;
-      } catch (error) {
-        if ((error as Error).name !== 'RenderingCancelledException') {
-          throw error;
-        }
-      }
-
+      try { await renderTask.promise; } catch (e) { if ((e as Error).name !== 'RenderingCancelledException') throw e; }
       if (isCurrent) {
-        drawAnnotations(overlayCanvas, annotationsByPage[pageNumber] ?? [], draft);
+        drawAnnotations(overlayCanvas, annotationsByPage[pageNumber] ?? [], draft, tool);
         setIsBusy(false);
       }
     };
-
-    renderPage().catch((error) => {
-      setStatus(`Render error: ${(error as Error).message}`);
-      setIsBusy(false);
-    });
-
-    return () => {
-      isCurrent = false;
-      activeRenderRef.current?.cancel();
-    };
-  }, [pdfDoc, pageNumber, zoom, annotationsByPage, draft]);
+    renderPage().catch((e) => { setStatus(`Render error: ${(e as Error).message}`); setIsBusy(false); });
+    return () => { isCurrent = false; activeRenderRef.current?.cancel(); };
+  }, [pdfDoc, pageNumber, zoom, annotationsByPage, draft, tool]);
 
   const toNormalizedPoint = (event: React.PointerEvent<HTMLCanvasElement>): Point => {
     const canvas = overlayCanvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
-
     const rect = canvas.getBoundingClientRect();
-    const x = clamp01((event.clientX - rect.left) / rect.width);
-    const y = clamp01((event.clientY - rect.top) / rect.height);
-    return { x, y };
+    return { x: clamp01((event.clientX - rect.left) / rect.width), y: clamp01((event.clientY - rect.top) / rect.height) };
   };
 
-  const addAnnotation = (build: (base: Pick<Annotation, 'id' | 'zIndex' | 'color' | 'author' | 'createdAt' | 'updatedAt' | 'locked'>) => Annotation) => {
-    const pageAnnotations = annotationsByPage[pageNumber] ?? [];
-    const timestamp = new Date().toISOString();
-    const base = {
-      id: randomId(),
-      zIndex: nextZIndex(pageAnnotations),
-      color,
-      author: author.trim() || 'local-user',
-      createdAt: timestamp,
-      updatedAt: timestamp,
-      locked: false,
-    };
-
-    const annotation = build(base);
-
-    setAnnotationsByPage((prev) => ({
-      ...prev,
-      [pageNumber]: [...(prev[pageNumber] ?? []), annotation],
-    }));
-  };
+  const makeToolCtx = useCallback(() => ({
+    dispatch,
+    page: pageNumber,
+    color,
+    author: author.trim() || 'local-user',
+    annotations: currentAnnotations,
+    selection,
+    draft: draftRef.current,
+    setDraft,
+    setSelection,
+    nextZIndex: () => nextZIndex(currentAnnotations),
+    randomId,
+  }), [dispatch, pageNumber, color, author, currentAnnotations, selection, setDraft]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (!pdfDoc) return;
-
-    const point = toNormalizedPoint(event);
-
-    if (tool === 'text') {
-      const text = window.prompt('Text markup');
-      if (!text || !text.trim()) return;
-
-      addAnnotation((base) => ({
-        ...base,
-        type: 'text',
-        text: text.trim(),
-        x: point.x,
-        y: point.y,
-        fontSize: FONT_SIZE,
-      }));
-      return;
-    }
-
-    if (tool === 'pen') {
-      setDraft({ type: 'pen', points: [point] });
-      return;
-    }
-
-    setDraft({ type: tool as 'rectangle' | 'highlight', start: point, end: point });
+    const activeTool = getTool(tool);
+    if (!activeTool) return;
+    activeTool.onPointerDown(makeToolCtx(), { point: toNormalizedPoint(event), shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey });
   };
 
   const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!draft) return;
-
-    const point = toNormalizedPoint(event);
-
-    if (draft.type === 'pen') {
-      setDraft((prev) => {
-        if (!prev || prev.type !== 'pen') return prev;
-        return { ...prev, points: [...prev.points, point] };
-      });
-      return;
-    }
-
-    setDraft((prev) => {
-      if (!prev || prev.type === 'pen') return prev;
-      return { ...prev, end: point };
-    });
+    if (!pdfDoc) return;
+    const activeTool = getTool(tool);
+    if (!activeTool) return;
+    activeTool.onPointerMove(makeToolCtx(), { point: toNormalizedPoint(event), shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey });
   };
 
-  const commitDraft = () => {
-    if (!draft) return;
+  const handlePointerUp = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!pdfDoc) return;
+    const activeTool = getTool(tool);
+    if (!activeTool) return;
+    activeTool.onPointerUp(makeToolCtx(), { point: toNormalizedPoint(event), shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey });
+  };
 
-    if (draft.type === 'pen') {
-      if (draft.points.length > 1) {
-        addAnnotation((base) => ({
-          ...base,
-          type: 'pen',
-          points: draft.points,
-          thickness: PEN_THICKNESS,
-        }));
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!pdfDoc) return;
+      const tgt = e.target as HTMLElement;
+      if (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA') return;
+
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        const inv = historyRef.current.undo();
+        if (inv) dispatchSilent(inv);
+        return;
       }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'Z' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        const fwd = historyRef.current.redo();
+        if (fwd) dispatchSilent(fwd);
+        return;
+      }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selection.ids.size > 0) {
+        e.preventDefault();
+        for (const id of selection.ids) {
+          const ann = currentAnnotations.find((a) => a.id === id);
+          if (ann && !ann.locked) dispatch({ type: 'REMOVE_ANNOTATION', page: pageNumber, id, removed: ann });
+        }
+        setSelection(deselectAll());
+        return;
+      }
+      if (e.key === '[' && selection.ids.size > 0) { e.preventDefault(); for (const id of selection.ids) dispatch({ type: 'SET_Z_ORDER', page: pageNumber, id, op: 'down' }); return; }
+      if (e.key === ']' && selection.ids.size > 0) { e.preventDefault(); for (const id of selection.ids) dispatch({ type: 'SET_Z_ORDER', page: pageNumber, id, op: 'up' }); return; }
+      if (e.key === '?') { setShowShortcuts((v) => !v); return; }
 
-      setDraft(null);
-      return;
-    }
+      const newTool = getToolForKey(e.key);
+      if (newTool) { setTool(newTool); setDraft(null); if (newTool !== 'select') setSelection(deselectAll()); }
 
-    const rect = normalizeRect(draft.start, draft.end);
-    if (rect.width < 0.001 || rect.height < 0.001) {
-      setDraft(null);
-      return;
-    }
+      const at = getTool(tool);
+      if (at?.onKeyDown) at.onKeyDown(makeToolCtx(), e);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [pdfDoc, tool, selection, currentAnnotations, pageNumber, dispatch, dispatchSilent, setDraft, makeToolCtx]);
 
-    addAnnotation((base) => ({
-      ...base,
-      type: draft.type,
-      ...rect,
-      thickness: PEN_THICKNESS,
-    }));
-
-    setDraft(null);
-  };
-
-  const handlePointerUp = () => {
-    commitDraft();
-  };
-
-  const handleOpenClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleImportSidecarClick = () => {
-    sidecarInputRef.current?.click();
-  };
+  const handleHandleDown = useCallback((_anchor: AnchorPosition, e: React.PointerEvent) => { e.preventDefault(); }, []);
 
   const loadPdf = async (bytes: Uint8Array, name: string) => {
     setIsBusy(true);
     setStatus('Loading PDF...');
-
     const loadingTask = getDocument({ data: bytes });
     const doc = await loadingTask.promise;
     const metadata = await doc.getMetadata().catch(() => null);
     const attachments = await doc.getAttachments().catch(() => null);
-
     const fingerprint = doc.fingerprints[0] ?? name;
     const info = metadata?.info as Record<string, unknown> | undefined;
     const keywords = typeof info?.Keywords === 'string' ? info.Keywords : undefined;
@@ -395,10 +391,8 @@ export default function App() {
     const embeddedLegacy = extractDocumentFromKeywords(keywords);
     const embedded = embeddedAttachment ?? embeddedLegacy;
     const local = loadAnnotationsFromLocalStorage(fingerprint);
-
     let loadedAnnotations: AnnotationsByPage = {};
     let loadedSource = 'empty';
-
     if (embedded) {
       loadedAnnotations = toAnnotationsByPage(embedded);
       setAuthor(embedded.exportedBy || 'local-user');
@@ -408,7 +402,6 @@ export default function App() {
       setAuthor(local.exportedBy || 'local-user');
       loadedSource = 'local autosave';
     }
-
     setPdfDoc(doc);
     setDocumentFingerprint(fingerprint);
     setSourceBytes(bytes);
@@ -416,8 +409,13 @@ export default function App() {
     setPageCount(doc.numPages);
     setPageNumber(1);
     setZoom(1);
-    setAnnotationsByPage(loadedAnnotations);
+    // Load annotations into reducer
+    for (const [pageKey, anns] of Object.entries(loadedAnnotations)) {
+      dispatchRaw({ type: 'LOAD_PAGE', page: Number(pageKey), annotations: anns });
+    }
+    historyRef.current.clear();
     setDraft(null);
+    setSelection(deselectAll());
     setStatus(`Loaded ${name} (${doc.numPages} pages) with ${loadedSource}.`);
     setIsBusy(false);
   };
@@ -425,287 +423,131 @@ export default function App() {
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
-    try {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      await loadPdf(bytes, file.name);
-    } catch (error) {
-      setStatus(`Open error: ${(error as Error).message}`);
-      setIsBusy(false);
-    } finally {
-      event.target.value = '';
-    }
+    try { await loadPdf(new Uint8Array(await file.arrayBuffer()), file.name); }
+    catch (e) { setStatus(`Open error: ${(e as Error).message}`); setIsBusy(false); }
+    finally { event.target.value = ''; }
   };
 
   const handleSidecarFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
     try {
-      const text = await file.text();
-      const parsed = parseAnnotationDocument(JSON.parse(text) as unknown);
-      if (!parsed) {
-        setStatus('Invalid sidecar file. Expected KPDF schema v2 JSON.');
-        return;
-      }
-
-      setAnnotationsByPage(toAnnotationsByPage(parsed));
+      const parsed = parseAnnotationDocument(JSON.parse(await file.text()) as unknown);
+      if (!parsed) { setStatus('Invalid sidecar file.'); return; }
+      const loaded = toAnnotationsByPage(parsed);
+      for (const [pk, anns] of Object.entries(loaded)) dispatchRaw({ type: 'LOAD_PAGE', page: Number(pk), annotations: anns });
+      historyRef.current.clear();
       setAuthor(parsed.exportedBy || 'local-user');
-
-      if (parsed.sourceFingerprint && documentFingerprint && parsed.sourceFingerprint !== documentFingerprint) {
-        setStatus('Imported sidecar with fingerprint mismatch. Verify markup alignment.');
-      } else {
-        setStatus(`Imported sidecar (${Object.keys(parsed.pages).length} pages).`);
-      }
-    } catch (error) {
-      setStatus(`Import error: ${(error as Error).message}`);
-    } finally {
-      event.target.value = '';
-    }
+      setStatus(parsed.sourceFingerprint && documentFingerprint && parsed.sourceFingerprint !== documentFingerprint
+        ? 'Imported sidecar with fingerprint mismatch.'
+        : `Imported sidecar (${Object.keys(parsed.pages).length} pages).`);
+    } catch (e) { setStatus(`Import error: ${(e as Error).message}`); }
+    finally { event.target.value = ''; }
   };
 
   const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     const file = event.dataTransfer.files?.[0];
-    if (!file || file.type !== 'application/pdf') {
-      setStatus('Drop a valid PDF file.');
-      return;
-    }
-
-    try {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      await loadPdf(bytes, file.name);
-    } catch (error) {
-      setStatus(`Drop error: ${(error as Error).message}`);
-      setIsBusy(false);
-    }
-  };
-
-  const downloadPdfFile = (output: Uint8Array, name: string) => {
-    const blob = new Blob([output as unknown as BlobPart], { type: 'application/pdf' });
-    const url = URL.createObjectURL(blob);
-
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = name;
-    anchor.click();
-
-    URL.revokeObjectURL(url);
+    if (!file || file.type !== 'application/pdf') { setStatus('Drop a valid PDF file.'); return; }
+    try { await loadPdf(new Uint8Array(await file.arrayBuffer()), file.name); }
+    catch (e) { setStatus(`Drop error: ${(e as Error).message}`); setIsBusy(false); }
   };
 
   const savePdf = async () => {
-    if (!sourceBytes) {
-      setStatus('Open a PDF before saving.');
-      return;
-    }
-
+    if (!sourceBytes) { setStatus('Open a PDF before saving.'); return; }
     try {
       setIsBusy(true);
       setStatus(flattenOnSave ? 'Saving flattened PDF...' : 'Saving editable PDF...');
-
-      const payload = createAnnotationDocument(
-        annotationsByPage,
-        author.trim() || 'local-user',
-        documentFingerprint || undefined,
-      );
-      const serializedPayload = serializeAnnotationDocumentBytes(payload);
+      const payload = createAnnotationDocument(annotationsByPage, author.trim() || 'local-user', documentFingerprint || undefined);
+      const serialized = serializeAnnotationDocumentBytes(payload);
       const safeName = baseName(fileName);
-
       const output = await exportPdf(sourceBytes, annotationsByPage, {
         flatten: flattenOnSave,
-        embeddedAttachment: flattenOnSave
-          ? undefined
-          : {
-            fileName: PDF_ATTACHMENT_FILENAME,
-            mimeType: PDF_ATTACHMENT_MIME,
-            description: 'KPDF annotation payload v2',
-            content: serializedPayload,
-            thresholdBytes: DEFAULT_EMBED_SIZE_THRESHOLD_BYTES,
-          },
+        embeddedAttachment: flattenOnSave ? undefined : {
+          fileName: PDF_ATTACHMENT_FILENAME, mimeType: PDF_ATTACHMENT_MIME,
+          description: 'KPDF annotation payload v2', content: serialized, thresholdBytes: DEFAULT_EMBED_SIZE_THRESHOLD_BYTES,
+        },
       });
-
-      downloadPdfFile(output.bytes, flattenOnSave ? `${safeName}-flattened.pdf` : `${safeName}-editable.pdf`);
+      const blob = new Blob([output.bytes as unknown as BlobPart], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = flattenOnSave ? `${safeName}-flattened.pdf` : `${safeName}-editable.pdf`; a.click();
+      URL.revokeObjectURL(url);
       downloadSidecar(safeName, payload);
-
-      if (documentFingerprint) {
-        saveAnnotationsToLocalStorage(documentFingerprint, payload);
-      }
-
-      const buildSaveStatus = (persistence: ExportPersistenceResult): string => {
-        if (flattenOnSave) {
-          return 'Saved flattened PDF + sidecar JSON.';
-        }
-        if (persistence.mode === 'attachment') {
-          return 'Saved editable PDF (embedded attachment) + sidecar JSON.';
-        }
-        if (persistence.mode === 'sidecar-only') {
-          return `Saved editable PDF + sidecar JSON. Payload ${persistence.payloadBytes}B exceeded ${persistence.thresholdBytes}B embed threshold.`;
-        }
+      if (documentFingerprint) saveAnnotationsToLocalStorage(documentFingerprint, payload);
+      const msg = (p: ExportPersistenceResult) => {
+        if (flattenOnSave) return 'Saved flattened PDF + sidecar JSON.';
+        if (p.mode === 'attachment') return 'Saved editable PDF (embedded attachment) + sidecar JSON.';
+        if (p.mode === 'sidecar-only') return `Saved PDF + sidecar. Payload ${p.payloadBytes}B > ${p.thresholdBytes}B threshold.`;
         return 'Saved editable PDF + sidecar JSON.';
       };
-
-      setStatus(buildSaveStatus(output.persistence));
+      setStatus(msg(output.persistence));
       setIsBusy(false);
-    } catch (error) {
-      setStatus(`Save error: ${(error as Error).message}`);
-      setIsBusy(false);
-    }
+    } catch (e) { setStatus(`Save error: ${(e as Error).message}`); setIsBusy(false); }
   };
 
-  const undo = () => {
-    setAnnotationsByPage((prev) => {
-      const page = prev[pageNumber] ?? [];
-      if (page.length === 0) return prev;
-
-      const nextPage = [...page];
-      let removed = false;
-      for (let i = nextPage.length - 1; i >= 0; i -= 1) {
-        if (!nextPage[i].locked) {
-          nextPage.splice(i, 1);
-          removed = true;
-          break;
-        }
-      }
-
-      if (!removed) return prev;
-
-      return {
-        ...prev,
-        [pageNumber]: nextPage,
-      };
-    });
-  };
-
+  const handleUndo = () => { const inv = historyRef.current.undo(); if (inv) dispatchSilent(inv); };
+  const handleRedo = () => { const fwd = historyRef.current.redo(); if (fwd) dispatchSilent(fwd); };
   const clearPage = () => {
-    setAnnotationsByPage((prev) => ({
-      ...prev,
-      [pageNumber]: (prev[pageNumber] ?? []).filter((annotation) => annotation.locked),
-    }));
+    const removed = currentAnnotations.filter((a) => !a.locked);
+    if (removed.length > 0) dispatch({ type: 'CLEAR_PAGE', page: pageNumber, removed });
   };
+
+  const toolbarTools: Tool[] = ['select', 'pen', 'rectangle', 'highlight', 'text', 'arrow', 'callout', 'cloud', 'measurement', 'polygon', 'stamp'];
+  const toolLabel = (t: Tool) => TOOL_SHORTCUTS.find((s) => s.tool === t)?.label ?? t;
 
   return (
-    <div className="app" onDrop={handleDrop} onDragOver={(event) => event.preventDefault()}>
+    <div className="app" onDrop={handleDrop} onDragOver={(e) => e.preventDefault()}>
       <header className="toolbar">
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="application/pdf"
-          onChange={handleFileChange}
-          hidden
-        />
-
-        <input
-          ref={sidecarInputRef}
-          type="file"
-          accept="application/json,.json,.kpdf.json"
-          onChange={handleSidecarFileChange}
-          hidden
-        />
-
-        <button onClick={handleOpenClick}>Open PDF</button>
-        <button onClick={handleImportSidecarClick} disabled={!pdfDoc || isBusy}>Import Sidecar</button>
+        <input ref={fileInputRef} type="file" accept="application/pdf" onChange={handleFileChange} hidden />
+        <input ref={sidecarInputRef} type="file" accept="application/json,.json,.kpdf.json" onChange={handleSidecarFileChange} hidden />
+        <button onClick={() => fileInputRef.current?.click()}>Open PDF</button>
+        <button onClick={() => sidecarInputRef.current?.click()} disabled={!pdfDoc || isBusy}>Import Sidecar</button>
         <button onClick={savePdf} disabled={!pdfDoc || isBusy}>Save PDF</button>
-
         <label className="toggle-row">
-          <input
-            type="checkbox"
-            checked={flattenOnSave}
-            onChange={(event) => setFlattenOnSave(event.target.checked)}
-            disabled={!pdfDoc || isBusy}
-          />
-          Flatten on save
+          <input type="checkbox" checked={flattenOnSave} onChange={(e) => setFlattenOnSave(e.target.checked)} disabled={!pdfDoc || isBusy} />
+          Flatten
         </label>
-
         <span className="divider" />
-
-        {(['pen', 'rectangle', 'highlight', 'text'] as Tool[]).map((id) => (
-          <button
-            key={id}
-            className={tool === id ? 'active' : ''}
-            onClick={() => setTool(id)}
-            disabled={!pdfDoc}
-          >
-            {toolLabels[id]}
+        {toolbarTools.map((id) => (
+          <button key={id} className={tool === id ? 'active' : ''} onClick={() => { setTool(id); setDraft(null); if (id !== 'select') setSelection(deselectAll()); }} disabled={!pdfDoc} title={toolLabel(id)}>
+            {toolLabel(id)}
           </button>
         ))}
-
-        <input
-          className="color"
-          type="color"
-          value={color}
-          onChange={(event) => setColor(event.target.value)}
-          disabled={!pdfDoc}
-          title="Markup color"
-        />
-
+        <input className="color" type="color" value={color} onChange={(e) => setColor(e.target.value)} disabled={!pdfDoc} title="Markup color" />
         <label className="author-row">
           Author
-          <input
-            className="author-input"
-            value={author}
-            onChange={(event) => setAuthor(event.target.value)}
-            disabled={!pdfDoc}
-          />
+          <input className="author-input" value={author} onChange={(e) => setAuthor(e.target.value)} disabled={!pdfDoc} />
         </label>
-
-        <button onClick={undo} disabled={!pdfDoc}>Undo</button>
+        <span className="divider" />
+        <button onClick={handleUndo} disabled={!pdfDoc} title="Undo (Ctrl+Z)">Undo</button>
+        <button onClick={handleRedo} disabled={!pdfDoc} title="Redo (Ctrl+Shift+Z)">Redo</button>
         <button onClick={clearPage} disabled={!pdfDoc}>Clear Page</button>
-
+        <button onClick={() => setShowShortcuts((v) => !v)} title="Shortcuts (?)">?</button>
         <span className="divider" />
-
-        <button onClick={() => setZoom((value) => Math.max(0.5, +(value - 0.1).toFixed(2)))} disabled={!pdfDoc}>-</button>
+        <button onClick={() => setZoom((v) => Math.max(0.5, +(v - 0.1).toFixed(2)))} disabled={!pdfDoc}>-</button>
         <span>{Math.round(zoom * 100)}%</span>
-        <button onClick={() => setZoom((value) => Math.min(3, +(value + 0.1).toFixed(2)))} disabled={!pdfDoc}>+</button>
-
+        <button onClick={() => setZoom((v) => Math.min(3, +(v + 0.1).toFixed(2)))} disabled={!pdfDoc}>+</button>
         <span className="divider" />
-
-        <button
-          onClick={() => {
-            setDraft(null);
-            setPageNumber((value) => Math.max(1, value - 1));
-          }}
-          disabled={!pdfDoc || pageNumber <= 1}
-        >
-          Prev
-        </button>
-
+        <button onClick={() => { setDraft(null); setPageNumber((v) => Math.max(1, v - 1)); }} disabled={!pdfDoc || pageNumber <= 1}>Prev</button>
         <span>{pageNumber} / {pageCount || 0}</span>
-
-        <button
-          onClick={() => {
-            setDraft(null);
-            setPageNumber((value) => Math.min(pageCount, value + 1));
-          }}
-          disabled={!pdfDoc || pageNumber >= pageCount}
-        >
-          Next
-        </button>
+        <button onClick={() => { setDraft(null); setPageNumber((v) => Math.min(pageCount, v + 1)); }} disabled={!pdfDoc || pageNumber >= pageCount}>Next</button>
       </header>
-
       <main className="canvas-shell">
         {!pdfDoc ? (
-          <div className="empty-state">
-            <h1>KPDF Markup MVP</h1>
-            <p>Open or drop a PDF to start marking up.</p>
-          </div>
+          <div className="empty-state"><h1>KPDF Markup</h1><p>Open or drop a PDF to start marking up.</p></div>
         ) : (
           <div className="page-wrap">
             <canvas ref={pdfCanvasRef} className="pdf-canvas" />
-            <canvas
-              ref={overlayCanvasRef}
-              className="overlay-canvas"
-              onPointerDown={handlePointerDown}
-              onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}
-              onPointerLeave={handlePointerUp}
-            />
+            <canvas ref={overlayCanvasRef} className="overlay-canvas" style={{ cursor: getTool(tool)?.cursor ?? 'crosshair' }}
+              onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerLeave={handlePointerUp} />
+            <SelectionHandles selection={selection} annotations={currentAnnotations}
+              canvasWidth={overlayCanvasRef.current?.width ?? 0} canvasHeight={overlayCanvasRef.current?.height ?? 0}
+              canvasRect={canvasRect} onHandleDown={handleHandleDown} />
           </div>
         )}
       </main>
-
-      <footer className="status-line">
-        <span>{status}</span>
-      </footer>
+      <StatusBar status={status} />
+      <ShortcutHelpPanel visible={showShortcuts} onClose={() => setShowShortcuts(false)} />
     </div>
   );
 }
