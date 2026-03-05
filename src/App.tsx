@@ -17,7 +17,7 @@ import {
   toAnnotationsByPage,
 } from './annotationPersistence';
 import { exportPdf, type ExportPersistenceResult } from './pdfExport';
-import type { Annotation, AnnotationsByPage, AnchorPosition, Point, Tool } from './types';
+import type { Annotation, AnnotationsByPage, AnchorPosition, PageScale, Point, Tool } from './types';
 import { annotationReducer, computeInverse, type DocumentState } from './engine/state';
 import type { Action } from './engine/actions';
 import { createUndoStack, type UndoStack } from './engine/history';
@@ -32,10 +32,15 @@ import TabBar from './components/TabBar';
 import type { DocumentTab } from './workflow/documentStore';
 import { createDocumentTab } from './workflow/documentStore';
 import CommentsPanel from './components/CommentsPanel';
+import MarkupsList from './components/MarkupsList';
 import { createReviewState, isToolAllowed, type ReviewState } from './workflow/reviewMode';
 import { isTextDraft, FONT_SIZE as TEXT_FONT_SIZE } from './tools/textTool';
-import { STAMP_LIBRARY } from './workflow/stamps';
-import { getActiveStamp, setActiveStamp } from './tools/stampTool';
+import getStroke from 'perfect-freehand';
+import { getActiveStamp, setActiveStamp, getCachedImage } from './tools/stampTool';
+import StampPicker from './components/StampPicker';
+import ToolPresets from './components/ToolPresets';
+import type { ToolPreset } from './components/ToolPresets';
+import ScaleCalibrationPanel from './components/ScaleCalibrationPanel';
 
 type TabData = {
   pdfDoc: PDFDocumentProxy;
@@ -195,8 +200,15 @@ function drawAnnotations(
     ctx.stroke();
   };
 
-  const drawStampShape = (x: number, y: number, sw: number, sh: number, label: string, color: string) => {
+  const drawStampShape = (x: number, y: number, sw: number, sh: number, label: string, color: string, imageUrl?: string) => {
     const px = x * w, py = y * h, pw = sw * w, ph = sh * h;
+    if (imageUrl) {
+      const img = getCachedImage(imageUrl);
+      if (img) {
+        ctx.drawImage(img, px, py, pw, ph);
+        return;
+      }
+    }
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
     ctx.strokeRect(px, py, pw, ph);
@@ -242,7 +254,26 @@ function drawAnnotations(
 
     switch (ann.type) {
       case 'pen':
-        drawPen(ann.points, ann.color, ann.thickness);
+        if (ann.strokeWidths && ann.strokeWidths.length > 0) {
+          // Render variable-width stroke using perfect-freehand
+          const inputPts = ann.points.map((p: Point) => [p.x * w, p.y * h]);
+          const outline = getStroke(inputPts, {
+            size: ann.thickness * w,
+            thinning: 0.5,
+            smoothing: 0.5,
+            streamline: 0.5,
+          });
+          if (outline.length >= 2) {
+            const path = new Path2D();
+            path.moveTo(outline[0][0], outline[0][1]);
+            for (let i = 1; i < outline.length; i++) path.lineTo(outline[i][0], outline[i][1]);
+            path.closePath();
+            ctx.fillStyle = ann.color;
+            ctx.fill(path);
+          }
+        } else {
+          drawPen(ann.points, ann.color, ann.thickness);
+        }
         break;
       case 'rectangle':
       case 'highlight':
@@ -289,7 +320,7 @@ function drawAnnotations(
         }
         break;
       case 'stamp':
-        drawStampShape(ann.x, ann.y, ann.width, ann.height, ann.label, ann.color);
+        drawStampShape(ann.x, ann.y, ann.width, ann.height, ann.label, ann.color, ann.imageUrl);
         break;
       case 'callout': {
         const bx = ann.box.x * w, by = ann.box.y * h, bw = ann.box.width * w, bh = ann.box.height * h;
@@ -300,6 +331,130 @@ function drawAnnotations(
         ctx.fillStyle = ann.color;
         ctx.font = `${Math.max(10, ann.fontSize * w)}px ui-sans-serif, system-ui`;
         ctx.fillText(ann.text, bx + 4, by + bh / 2 + 4, bw - 8);
+        break;
+      }
+      case 'area': {
+        if (ann.points.length >= 3) {
+          ctx.beginPath();
+          ctx.moveTo(ann.points[0].x * w, ann.points[0].y * h);
+          for (let i = 1; i < ann.points.length; i++) ctx.lineTo(ann.points[i].x * w, ann.points[i].y * h);
+          ctx.closePath();
+          ctx.save();
+          ctx.fillStyle = ann.color;
+          ctx.globalAlpha = 0.15;
+          ctx.fill();
+          ctx.restore();
+          ctx.strokeStyle = ann.color;
+          ctx.lineWidth = Math.max(ann.thickness * w, 1.5);
+          ctx.stroke();
+          // Area label at centroid
+          let acx = 0, acy = 0;
+          for (const p of ann.points) { acx += p.x; acy += p.y; }
+          acx /= ann.points.length; acy /= ann.points.length;
+          const areaVal = (() => { let s = 0; for (let i = 0; i < ann.points.length; i++) { const j = (i + 1) % ann.points.length; s += ann.points[i].x * ann.points[j].y - ann.points[j].x * ann.points[i].y; } return Math.abs(s) / 2 * ann.scale; })();
+          ctx.fillStyle = ann.color;
+          ctx.font = `${Math.max(12, 0.014 * w)}px ui-sans-serif, system-ui`;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText(`${areaVal.toFixed(2)} ${ann.unit}`, acx * w, acy * h);
+          ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+        }
+        break;
+      }
+      case 'angle': {
+        const vx = ann.vertex.x * w, vy = ann.vertex.y * h;
+        ctx.strokeStyle = ann.color;
+        ctx.lineWidth = Math.max(ann.thickness * w, 1.5);
+        // Ray 1
+        ctx.beginPath(); ctx.moveTo(vx, vy); ctx.lineTo(ann.ray1.x * w, ann.ray1.y * h); ctx.stroke();
+        // Ray 2
+        ctx.beginPath(); ctx.moveTo(vx, vy); ctx.lineTo(ann.ray2.x * w, ann.ray2.y * h); ctx.stroke();
+        // Arc
+        const a1 = Math.atan2(ann.ray1.y - ann.vertex.y, ann.ray1.x - ann.vertex.x);
+        const a2 = Math.atan2(ann.ray2.y - ann.vertex.y, ann.ray2.x - ann.vertex.x);
+        ctx.beginPath(); ctx.arc(vx, vy, 20, a1, a2); ctx.stroke();
+        // Degree label
+        let angleDeg = Math.abs(a1 - a2) * (180 / Math.PI);
+        if (angleDeg > 180) angleDeg = 360 - angleDeg;
+        const midA = (a1 + a2) / 2;
+        ctx.fillStyle = ann.color;
+        ctx.font = `${Math.max(12, 0.014 * w)}px ui-sans-serif, system-ui`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(`${angleDeg.toFixed(1)}°`, vx + 32 * Math.cos(midA), vy + 32 * Math.sin(midA));
+        ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+        break;
+      }
+      case 'count': {
+        const ccx = ann.x * w, ccy = ann.y * h, cr = ann.radius * w;
+        ctx.beginPath();
+        ctx.arc(ccx, ccy, cr, 0, Math.PI * 2);
+        ctx.fillStyle = ann.color;
+        ctx.globalAlpha = 0.8;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = ann.color;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `bold ${Math.max(10, cr)}px sans-serif`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(`${ann.number}`, ccx, ccy);
+        ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+        break;
+      }
+      case 'dimension': {
+        const ddx = ann.end.x - ann.start.x;
+        const ddy = ann.end.y - ann.start.y;
+        const dLen = Math.sqrt(ddx * ddx + ddy * ddy);
+        if (dLen > 0) {
+          const nx = -ddy / dLen, ny = ddx / dLen;
+          const os = ann.offset;
+          const s = { x: ann.start.x + nx * os, y: ann.start.y + ny * os };
+          const e = { x: ann.end.x + nx * os, y: ann.end.y + ny * os };
+          ctx.strokeStyle = ann.color;
+          ctx.lineWidth = Math.max(ann.thickness * w, 1.5);
+          // Main line
+          ctx.beginPath(); ctx.moveTo(s.x * w, s.y * h); ctx.lineTo(e.x * w, e.y * h); ctx.stroke();
+          // Tick marks
+          const ts = 0.008 * w;
+          ctx.beginPath(); ctx.moveTo(s.x * w - nx * ts, s.y * h - ny * ts); ctx.lineTo(s.x * w + nx * ts, s.y * h + ny * ts); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(e.x * w - nx * ts, e.y * h - ny * ts); ctx.lineTo(e.x * w + nx * ts, e.y * h + ny * ts); ctx.stroke();
+          // Extension lines
+          ctx.save(); ctx.setLineDash([2, 2]); ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(ann.start.x * w, ann.start.y * h); ctx.lineTo(s.x * w, s.y * h); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(ann.end.x * w, ann.end.y * h); ctx.lineTo(e.x * w, e.y * h); ctx.stroke();
+          ctx.restore();
+          // Label
+          const dist = dLen * ann.scale;
+          ctx.fillStyle = ann.color;
+          ctx.font = `${Math.max(12, 0.014 * w)}px ui-sans-serif, system-ui`;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+          ctx.fillText(`${dist.toFixed(1)} ${ann.unit}`, (s.x + e.x) / 2 * w, (s.y + e.y) / 2 * h - 4);
+          ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+        }
+        break;
+      }
+      case 'ellipse': {
+        const ecx = (ann.x + ann.width / 2) * w;
+        const ecy = (ann.y + ann.height / 2) * h;
+        const erx = ann.width / 2 * w;
+        const ery = ann.height / 2 * h;
+        ctx.strokeStyle = ann.color;
+        ctx.lineWidth = Math.max(ann.thickness * w, 1.5);
+        ctx.beginPath();
+        ctx.ellipse(ecx, ecy, Math.abs(erx), Math.abs(ery), 0, 0, Math.PI * 2);
+        ctx.stroke();
+        break;
+      }
+      case 'polyline': {
+        if (ann.points.length >= 2) {
+          ctx.strokeStyle = ann.color;
+          ctx.lineWidth = Math.max(ann.thickness * w, 1.5);
+          ctx.lineJoin = 'round';
+          ctx.beginPath();
+          ctx.moveTo(ann.points[0].x * w, ann.points[0].y * h);
+          for (let i = 1; i < ann.points.length; i++) ctx.lineTo(ann.points[i].x * w, ann.points[i].y * h);
+          ctx.stroke();
+        }
         break;
       }
     }
@@ -337,10 +492,14 @@ export default function App() {
   const [status, setStatus] = useState('Drop a PDF or click Open PDF.');
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showComments, setShowComments] = useState(false);
+  const [showMarkupsList, setShowMarkupsList] = useState(false);
   const [reviewMode, setReviewMode] = useState<ReviewState>(createReviewState);
   const [canvasRect, setCanvasRect] = useState<DOMRect | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [activeStampId, setActiveStampId] = useState(getActiveStamp().id);
+  const [showStampPicker, setShowStampPicker] = useState(false);
+  const [showToolPresets, setShowToolPresets] = useState(false);
+  const [showScalePanel, setShowScalePanel] = useState(false);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const pdfDoc = activeTab ? tabDataRef.current.get(activeTab.id)?.pdfDoc ?? null : null;
@@ -350,6 +509,7 @@ export default function App() {
   const pageNumber = activeTab?.pageNumber ?? 1;
   const pageCount = activeTab?.pageCount ?? 0;
   const zoom = activeTab?.zoom ?? 1;
+  const currentPageScale: PageScale | null = activeTab?.pageScales[activeTab.pageNumber] ?? null;
 
   const { annotationsByPage } = state;
 
@@ -368,6 +528,18 @@ export default function App() {
     updateActiveTab((t) => {
       const next = typeof v === 'function' ? v(t.zoom) : v;
       return { ...t, zoom: next };
+    });
+  }, [updateActiveTab]);
+
+  const setPageScale = useCallback((scale: PageScale | null) => {
+    updateActiveTab((t) => {
+      const ps = { ...t.pageScales };
+      if (scale) {
+        ps[t.pageNumber] = scale;
+      } else {
+        delete ps[t.pageNumber];
+      }
+      return { ...t, pageScales: ps };
     });
   }, [updateActiveTab]);
 
@@ -485,7 +657,8 @@ export default function App() {
     setSelection,
     nextZIndex: () => nextZIndex(currentAnnotations),
     randomId,
-  }), [dispatch, pageNumber, color, author, currentAnnotations, selection, setDraft]);
+    pageScale: currentPageScale ?? undefined,
+  }), [dispatch, pageNumber, color, author, currentAnnotations, selection, setDraft, currentPageScale]);
 
   const toNormalizedEvent = (event: React.PointerEvent<HTMLCanvasElement>) => ({
     point: toNormalizedPoint(event),
@@ -846,12 +1019,13 @@ export default function App() {
 
   const textDraft = isTextDraft(draft) ? draft : null;
 
-  const toolbarTools: Tool[] = ['select', 'pen', 'rectangle', 'highlight', 'text', 'arrow', 'callout', 'cloud', 'measurement', 'polygon', 'stamp'];
+  const toolbarTools: Tool[] = ['select', 'pen', 'rectangle', 'highlight', 'text', 'arrow', 'callout', 'cloud', 'measurement', 'polygon', 'stamp', 'area', 'angle', 'count', 'dimension'];
   const toolLabel = (t: Tool) => TOOL_SHORTCUTS.find((s) => s.tool === t)?.label ?? t;
   const toolShortLabel: Record<string, string> = {
     select: 'Select', pen: 'Pen', rectangle: 'Rect', highlight: 'Hilite',
     text: 'Text', arrow: 'Arrow', callout: 'Callout', cloud: 'Cloud',
     measurement: 'Measure', polygon: 'Polygon', stamp: 'Stamp',
+    area: 'Area', angle: 'Angle', count: 'Count', dimension: 'Dim',
   };
 
   return (
@@ -890,20 +1064,18 @@ export default function App() {
 
         <input className="color" type="color" value={color} onChange={(e) => setColor(e.target.value)} disabled={!pdfDoc} title="Markup color" aria-label="Markup color" />
         {tool === 'stamp' && (
-          <select
+          <button
             className="stamp-select"
-            value={activeStampId}
-            onChange={(e) => {
-              const stamp = STAMP_LIBRARY.find((s) => s.id === e.target.value);
-              if (stamp) { setActiveStamp(stamp); setActiveStampId(stamp.id); }
-            }}
-            aria-label="Stamp type"
+            onClick={() => setShowStampPicker((v) => !v)}
+            aria-label="Select stamp type"
           >
-            {STAMP_LIBRARY.map((s) => (
-              <option key={s.id} value={s.id}>{s.label}</option>
-            ))}
-          </select>
+            {getActiveStamp().label}
+          </button>
         )}
+
+        <span className="divider" />
+
+        <button onClick={() => setShowToolPresets((v) => !v)} disabled={!pdfDoc} title="Tool Presets">Presets</button>
 
         <span className="divider" />
 
@@ -978,6 +1150,17 @@ export default function App() {
 
         <span className="divider" />
 
+        <button
+          className={showScalePanel ? 'active' : ''}
+          onClick={() => setShowScalePanel((v) => !v)}
+          disabled={!pdfDoc}
+          title="Scale calibration"
+        >
+          {currentPageScale ? `Scale: ${currentPageScale.unit}` : 'Scale'}
+        </button>
+
+        <span className="divider" />
+
         {/* Review & Comments */}
         <div className="action-group">
           <button
@@ -1001,6 +1184,14 @@ export default function App() {
             title="Toggle comments panel"
           >
             Comments
+          </button>
+          <button
+            className={showMarkupsList ? 'active' : ''}
+            onClick={() => setShowMarkupsList((v) => !v)}
+            disabled={!pdfDoc}
+            title="Toggle markups list"
+          >
+            Markups
           </button>
         </div>
       </header>
@@ -1047,8 +1238,46 @@ export default function App() {
         }}
         onClose={() => setShowComments(false)}
       />
+      <MarkupsList
+        visible={showMarkupsList}
+        annotationsByPage={annotationsByPage}
+        onJumpTo={(page, _annotationId) => {
+          setPageNumber(page);
+          setDraft(null);
+        }}
+        onClose={() => setShowMarkupsList(false)}
+        onUpdateAnnotation={(page, id, patch) => {
+          dispatch({ type: 'UPDATE_ANNOTATION', page, id, patch });
+        }}
+        onDeleteAnnotations={(items) => {
+          for (const { page, id } of items) {
+            const ann = annotationsByPage[page]?.find((a) => a.id === id);
+            if (ann && !ann.locked) dispatch({ type: 'REMOVE_ANNOTATION', page, id, removed: ann });
+          }
+        }}
+      />
       <StatusBar status={status} />
       <ShortcutHelpPanel visible={showShortcuts} onClose={() => setShowShortcuts(false)} />
+      <StampPicker
+        visible={showStampPicker}
+        activeStampId={activeStampId}
+        onSelectStamp={(stamp) => { setActiveStamp(stamp); setActiveStampId(stamp.id); }}
+        onClose={() => setShowStampPicker(false)}
+      />
+      <ToolPresets
+        visible={showToolPresets}
+        currentColor={color}
+        currentTool={tool}
+        onApplyPreset={(preset: ToolPreset) => { setTool(preset.tool); setColor(preset.color); }}
+        onClose={() => setShowToolPresets(false)}
+      />
+      <ScaleCalibrationPanel
+        visible={showScalePanel}
+        currentScale={currentPageScale}
+        onCalibrate={(scale) => { setPageScale(scale); setShowScalePanel(false); }}
+        onClear={() => setPageScale(null)}
+        onClose={() => setShowScalePanel(false)}
+      />
     </div>
   );
 }

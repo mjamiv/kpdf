@@ -21,7 +21,6 @@ describe('shortcuts', () => {
     });
 
     it('returns null for invalid key', () => {
-      expect(getToolForKey('x')).toBeNull();
       expect(getToolForKey(' ')).toBeNull();
       expect(getToolForKey('')).toBeNull();
     });

@@ -1,6 +1,15 @@
 import type { Annotation, Point } from '../types';
 import { boundingBox } from '../engine/hitTest';
 
+export function constrainTo45(start: Point, end: Point): Point {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  const angle = Math.atan2(dy, dx);
+  const snapped = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
+  return { x: start.x + dist * Math.cos(snapped), y: start.y + dist * Math.sin(snapped) };
+}
+
 export type SnapGuide = {
   axis: 'x' | 'y';
   position: number;

@@ -9,6 +9,10 @@ export type TextDraft = {
   y: number;
   color: string;
   author: string;
+  fontWeight?: 'normal' | 'bold';
+  fontStyle?: 'normal' | 'italic';
+  fontFamily?: string;
+  fontSize?: number;
 };
 
 export function isTextDraft(d: unknown): d is TextDraft {

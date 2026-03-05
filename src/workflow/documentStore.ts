@@ -1,4 +1,4 @@
-import type { AnnotationsByPage } from '../types';
+import type { AnnotationsByPage, PageScale } from '../types';
 
 export type DocumentTab = {
   id: string;
@@ -9,6 +9,7 @@ export type DocumentTab = {
   zoom: number;
   annotationsByPage: AnnotationsByPage;
   dirty: boolean;
+  pageScales: Record<number, PageScale>;
 };
 
 export function createDocumentTab(
@@ -26,6 +27,7 @@ export function createDocumentTab(
     zoom: 1,
     annotationsByPage: {},
     dirty: false,
+    pageScales: {},
   };
 }
 

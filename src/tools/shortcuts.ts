@@ -18,6 +18,12 @@ export const TOOL_SHORTCUTS: ShortcutDef[] = [
   { key: 'm', tool: 'measurement', label: 'Measurement (M)' },
   { key: 'g', tool: 'polygon', label: 'Polygon (G)' },
   { key: 's', tool: 'stamp', label: 'Stamp (S)' },
+  { key: 'e', tool: 'area', label: 'Area (E)' },
+  { key: 'n', tool: 'angle', label: 'Angle (N)' },
+  { key: 'x', tool: 'count', label: 'Count (X)' },
+  { key: 'd', tool: 'dimension', label: 'Dimension (D)' },
+  { key: 'o', tool: 'ellipse', label: 'Ellipse (O)' },
+  { key: 'l', tool: 'polyline', label: 'Polyline (L)' },
 ];
 
 export function getToolForKey(key: string): Tool | null {

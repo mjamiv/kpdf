@@ -1,6 +1,7 @@
 import type { ToolBehavior, ToolContext, NormalizedPointerEvent } from './registry';
 import type { Point } from '../types';
 import { registerTool } from './registry';
+import getStroke from 'perfect-freehand';
 
 type PenDraft = {
   toolType: 'pen';
@@ -13,6 +14,40 @@ export function isPenDraft(draft: unknown): draft is PenDraft {
 }
 
 const PEN_THICKNESS = 0.0025;
+
+function getStrokeOptions(canvasWidth: number) {
+  return {
+    size: PEN_THICKNESS * canvasWidth,
+    thinning: 0.5,
+    smoothing: 0.5,
+    streamline: 0.5,
+  };
+}
+
+function outlineToPath(outline: number[][]): Path2D {
+  const path = new Path2D();
+  if (outline.length < 2) return path;
+  path.moveTo(outline[0][0], outline[0][1]);
+  for (let i = 1; i < outline.length; i++) {
+    path.lineTo(outline[i][0], outline[i][1]);
+  }
+  path.closePath();
+  return path;
+}
+
+function renderStrokeOutline(
+  ctx2d: CanvasRenderingContext2D,
+  points: Point[],
+  color: string,
+  w: number,
+  h: number,
+) {
+  const inputPoints = points.map((p) => [p.x * w, p.y * h]);
+  const outline = getStroke(inputPoints, getStrokeOptions(w));
+  if (outline.length < 2) return;
+  ctx2d.fillStyle = color;
+  ctx2d.fill(outlineToPath(outline));
+}
 
 const penTool: ToolBehavior = {
   name: 'pen',
@@ -37,6 +72,30 @@ const penTool: ToolBehavior = {
     if (!isPenDraft(draft)) { ctx.setDraft(null); return; }
 
     if (draft.points.length > 1) {
+      // Compute stroke widths from perfect-freehand
+      const inputPoints = draft.points.map((p) => [p.x, p.y]);
+      const outline = getStroke(inputPoints, {
+        size: PEN_THICKNESS,
+        thinning: 0.5,
+        smoothing: 0.5,
+        streamline: 0.5,
+      });
+      // Sample stroke widths: for each original point, estimate width from outline
+      const strokeWidths = draft.points.map(() => PEN_THICKNESS);
+      if (outline.length > 0) {
+        const step = Math.max(1, Math.floor(outline.length / draft.points.length));
+        for (let i = 0; i < draft.points.length && i * step < outline.length; i++) {
+          // Use the outline to estimate local width (distance between opposing outline points)
+          const idx = i * step;
+          const oppositeIdx = outline.length - 1 - idx;
+          if (oppositeIdx >= 0 && oppositeIdx < outline.length) {
+            const dx = outline[idx][0] - outline[oppositeIdx][0];
+            const dy = outline[idx][1] - outline[oppositeIdx][1];
+            strokeWidths[i] = Math.sqrt(dx * dx + dy * dy);
+          }
+        }
+      }
+
       const timestamp = new Date().toISOString();
       ctx.dispatch({
         type: 'ADD_ANNOTATION',
@@ -52,6 +111,7 @@ const penTool: ToolBehavior = {
           type: 'pen',
           points: draft.points,
           thickness: PEN_THICKNESS,
+          strokeWidths,
         },
       });
     }
@@ -61,16 +121,7 @@ const penTool: ToolBehavior = {
 
   renderDraft(ctx2d: CanvasRenderingContext2D, draft: unknown, w: number, h: number) {
     if (!isPenDraft(draft) || draft.points.length < 2) return;
-    ctx2d.beginPath();
-    ctx2d.moveTo(draft.points[0].x * w, draft.points[0].y * h);
-    for (let i = 1; i < draft.points.length; i++) {
-      ctx2d.lineTo(draft.points[i].x * w, draft.points[i].y * h);
-    }
-    ctx2d.strokeStyle = (draft as PenDraft).color || '#111827';
-    ctx2d.lineJoin = 'round';
-    ctx2d.lineCap = 'round';
-    ctx2d.lineWidth = Math.max(PEN_THICKNESS * w, 1.5);
-    ctx2d.stroke();
+    renderStrokeOutline(ctx2d, draft.points, draft.color || '#111827', w, h);
   },
 };
 
