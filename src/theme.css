@@ -1,0 +1,114 @@
+/* KPDF Terminal Theme — Design Tokens */
+
+:root {
+  /* Base ink + papers */
+  --kpdf-ink-strong: #111317;
+  --kpdf-ink: #1d2128;
+  --kpdf-ink-muted: #555e6b;
+  --kpdf-paper: #ececec;
+  --kpdf-paper-warm: #e8dacd;
+  --kpdf-paper-elevated: #f5f5f5;
+
+  /* Window/chrome */
+  --kpdf-chrome: #d7d7d9;
+  --kpdf-frame: #20233a;
+  --kpdf-border: #b9bcc2;
+  --kpdf-border-strong: #7a7f88;
+
+  /* Functional accents — darkened for WCAG AA 4.5:1 on light backgrounds */
+  --kpdf-success: #357a45;
+  --kpdf-warning: #8a7520;
+  --kpdf-danger: #a8433c;
+  --kpdf-info: #366096;
+
+  /* Traffic lights (decorative only) */
+  --kpdf-dot-red: #de5a52;
+  --kpdf-dot-yellow: #e1c44a;
+  --kpdf-dot-green: #5ac251;
+
+  /* Backdrops */
+  --kpdf-backdrop-dark: #101217;
+  --kpdf-backdrop-vignette: rgba(7, 9, 13, 0.78);
+
+  /* Shadows */
+  --kpdf-shadow-window: 0 18px 45px rgba(0, 0, 0, 0.26);
+  --kpdf-shadow-soft: 0 8px 22px rgba(0, 0, 0, 0.16);
+
+  /* Typography */
+  --kpdf-font-ui: "IBM Plex Mono", "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
+  --kpdf-font-display: "IBM Plex Mono", "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
+  --kpdf-text-12: 12px;
+  --kpdf-text-13: 13px;
+  --kpdf-text-14: 14px;
+  --kpdf-text-16: 16px;
+  --kpdf-text-20: 20px;
+  --kpdf-leading-tight: 1.2;
+  --kpdf-leading-base: 1.45;
+  --kpdf-tracking-tight: -0.01em;
+
+  /* Spacing */
+  --kpdf-space-2: 2px;
+  --kpdf-space-4: 4px;
+  --kpdf-space-8: 8px;
+  --kpdf-space-12: 12px;
+  --kpdf-space-16: 16px;
+  --kpdf-space-24: 24px;
+  --kpdf-space-32: 32px;
+
+  /* Radius */
+  --kpdf-radius-control: 6px;
+  --kpdf-radius-panel: 10px;
+  --kpdf-radius-window: 18px;
+
+  /* Stroke */
+  --kpdf-stroke-1: 1px;
+  --kpdf-stroke-2: 2px;
+
+  /* === Bridge: map old Forge tokens to new kpdf tokens === */
+  --bg: var(--kpdf-paper-warm);
+  --surface-0: var(--kpdf-paper);
+  --surface-1: var(--kpdf-paper-elevated);
+  --surface-2: var(--kpdf-chrome);
+  --surface-3: var(--kpdf-border);
+  --surface-hover: #dfe0e3;
+  --panel: var(--kpdf-paper);
+
+  --line: var(--kpdf-border);
+  --line-strong: var(--kpdf-border-strong);
+
+  --text: var(--kpdf-ink);
+  --text-secondary: var(--kpdf-ink-muted);
+  --muted: var(--kpdf-border-strong);
+
+  --accent: var(--kpdf-info);
+  --accent-bright: #2a5080;
+  --accent-soft: rgba(54, 96, 150, 0.10);
+  --accent-glow: rgba(54, 96, 150, 0.25);
+
+  --cat-basic: #2a7abf;
+  --cat-shapes: #5b5fc7;
+  --cat-aec: #357a45;
+  --cat-stamp: #7c4dac;
+
+  --danger: var(--kpdf-danger);
+  --danger-soft: rgba(168, 67, 60, 0.12);
+  --success: var(--kpdf-success);
+  --warning: var(--kpdf-warning);
+
+  --sidebar-width: 240px;
+  --right-panel-width: 340px;
+  --toolbar-height: 44px;
+  --radius: var(--kpdf-radius-control);
+  --radius-lg: var(--kpdf-radius-panel);
+
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

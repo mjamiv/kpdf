@@ -124,7 +124,7 @@ export default function ToolRail(props: ToolRailProps) {
         >
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
             <circle cx="9" cy="9" r="7" />
-            <text x="9" y="12.5" fill="currentColor" fontSize="10" fontFamily="Outfit, sans-serif" textAnchor="middle" stroke="none" fontWeight="600">?</text>
+            <text x="9" y="12.5" fill="currentColor" fontSize="10" fontFamily="IBM Plex Mono, monospace" textAnchor="middle" stroke="none" fontWeight="600">?</text>
           </svg>
         </button>
       </Tooltip>

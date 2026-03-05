@@ -122,7 +122,7 @@ function HighlightedText({ text, ranges }: { text: string; ranges: Array<[number
       parts.push(<span key={`t-${lastEnd}`}>{text.slice(lastEnd, start)}</span>);
     }
     parts.push(
-      <strong key={`h-${start}`} style={{ color: '#2563eb' }}>
+      <strong key={`h-${start}`} style={{ color: 'var(--kpdf-info, #3f6ea8)' }}>
         {text.slice(start, end)}
       </strong>,
     );
@@ -222,7 +222,8 @@ export function CommandPalette({ commands, isOpen, onClose, onExecute }: Command
         alignItems: 'flex-start',
         justifyContent: 'center',
         paddingTop: '15vh',
-        backgroundColor: 'rgba(0, 0, 0, 0.4)',
+        backgroundColor: 'rgba(236, 236, 236, 0.7)',
+        backdropFilter: 'blur(4px)',
       }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -236,14 +237,16 @@ export function CommandPalette({ commands, isOpen, onClose, onExecute }: Command
         style={{
           width: '100%',
           maxWidth: 560,
-          backgroundColor: '#fff',
+          backgroundColor: 'var(--surface-1)',
+          border: '1px solid var(--line)',
           borderRadius: 12,
-          boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+          boxShadow: 'var(--kpdf-shadow-window, 0 18px 45px rgba(0, 0, 0, 0.26))',
           overflow: 'hidden',
+          fontFamily: 'var(--kpdf-font-ui, "IBM Plex Mono", monospace)',
         }}
         onKeyDown={handleKeyDown}
       >
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid #e5e7eb' }}>
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line)' }}>
           <input
             ref={inputRef}
             type="text"
@@ -257,6 +260,8 @@ export function CommandPalette({ commands, isOpen, onClose, onExecute }: Command
               fontSize: 16,
               padding: '4px 0',
               backgroundColor: 'transparent',
+              color: 'var(--text)',
+              fontFamily: 'var(--kpdf-font-ui, "IBM Plex Mono", monospace)',
             }}
             aria-label="Search commands"
             role="combobox"
@@ -280,7 +285,7 @@ export function CommandPalette({ commands, isOpen, onClose, onExecute }: Command
               style={{
                 padding: '24px 16px',
                 textAlign: 'center',
-                color: '#9ca3af',
+                color: 'var(--muted)',
                 fontSize: 14,
               }}
             >
@@ -295,8 +300,8 @@ export function CommandPalette({ commands, isOpen, onClose, onExecute }: Command
                   padding: '8px 16px 4px',
                   fontSize: 11,
                   fontWeight: 600,
-                  textTransform: 'uppercase',
-                  color: '#9ca3af',
+                  textTransform: 'uppercase' as const,
+                  color: 'var(--muted)',
                   letterSpacing: '0.05em',
                 }}
               >
@@ -319,7 +324,8 @@ export function CommandPalette({ commands, isOpen, onClose, onExecute }: Command
                       justifyContent: 'space-between',
                       padding: '8px 16px',
                       cursor: 'pointer',
-                      backgroundColor: isSelected ? '#f3f4f6' : 'transparent',
+                      backgroundColor: isSelected ? 'var(--surface-2)' : 'transparent',
+                      color: 'var(--text)',
                       fontSize: 14,
                     }}
                   >
@@ -328,7 +334,7 @@ export function CommandPalette({ commands, isOpen, onClose, onExecute }: Command
                         <HighlightedText text={cmd.label} ranges={cmd.matchRanges} />
                       </div>
                       {cmd.description && (
-                        <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
+                        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
                           {cmd.description}
                         </div>
                       )}
@@ -338,11 +344,11 @@ export function CommandPalette({ commands, isOpen, onClose, onExecute }: Command
                         style={{
                           padding: '2px 6px',
                           fontSize: 11,
-                          backgroundColor: '#f3f4f6',
-                          border: '1px solid #e5e7eb',
+                          backgroundColor: 'var(--surface-2)',
+                          border: '1px solid var(--line)',
                           borderRadius: 4,
-                          fontFamily: 'monospace',
-                          color: '#6b7280',
+                          fontFamily: 'var(--kpdf-font-ui, "IBM Plex Mono", monospace)',
+                          color: 'var(--muted)',
                           marginLeft: 12,
                           flexShrink: 0,
                         }}
@@ -360,9 +366,9 @@ export function CommandPalette({ commands, isOpen, onClose, onExecute }: Command
         <div
           style={{
             padding: '8px 16px',
-            borderTop: '1px solid #e5e7eb',
+            borderTop: '1px solid var(--line)',
             fontSize: 11,
-            color: '#9ca3af',
+            color: 'var(--muted)',
             display: 'flex',
             gap: 12,
           }}

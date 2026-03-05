@@ -50,6 +50,13 @@ export default function TopBar(props: TopBarProps) {
 
   return (
     <header className="top-bar" role="banner">
+      {/* Traffic light dots */}
+      <div className="traffic-dots" aria-hidden="true">
+        <span className="dot dot-red" />
+        <span className="dot dot-yellow" />
+        <span className="dot dot-green" />
+      </div>
+
       {/* Left: file + edit */}
       <div className="top-bar-group" role="group" aria-label="File">
         <Tooltip content="Toggle sidebar" position="bottom">
@@ -79,6 +86,12 @@ export default function TopBar(props: TopBarProps) {
           </button>
         </Tooltip>
       </div>
+
+      {/* Center spacer */}
+      <div className="top-bar-spacer" />
+
+      {/* Terminal title */}
+      <div className="top-bar-title">kpdf@local — 80 × 24</div>
 
       {/* Center spacer */}
       <div className="top-bar-spacer" />

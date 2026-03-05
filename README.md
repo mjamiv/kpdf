@@ -12,11 +12,11 @@ Access app live at: https://mjamiv.github.io/kpdf/
 - **AEC**: Measurement, Area, Angle, Count, Dimension
 - **Other**: Stamp (with custom stamp library), Hyperlink (cross-page links)
 
-### Minimalist UI — "Forge" Dark Theme
-- **Layout**: Slim TopBar (40px) + vertical ToolRail (46px) + maximized canvas
-- **Dark industrial aesthetic**: 5-layer dark surface hierarchy with warm amber (#e8a023) accent
-- **Typography**: Outfit (UI) + JetBrains Mono (numeric readouts)
-- **Tool rail**: Vertical sidebar with collapsible tool groups, category-colored active states (cyan/indigo/green/purple)
+### Terminal-Native UI
+- **Layout**: Rounded window container on warm paper background, slim TopBar (40px) with traffic-light dots and terminal title, vertical ToolRail (46px), maximized canvas
+- **Light terminal aesthetic**: Ink-on-paper color system with monospace-first typography (IBM Plex Mono + JetBrains Mono)
+- **Design tokens**: `--kpdf-*` CSS custom properties in dedicated `src/theme.css` with WCAG AA contrast compliance
+- **Tool rail**: Vertical sidebar with collapsible tool groups, ink-inversion active states, category-colored tool indicators
 - **Left sidebar**: Unified "Document" view with collapsible Sheets and Pages sections
 - **Right panel**: 3-tab interface — Activity (comments + punch list), Markups, AI Assist
 - **Canvas**: Drop zone empty state with keyboard shortcut hints, drag overlay for PDF drop
@@ -25,6 +25,7 @@ Access app live at: https://mjamiv.github.io/kpdf/
 - **Loading indicator**: Animated progress bar during PDF operations
 - **Command palette**: Fuzzy-search commands via Cmd+K / Ctrl+K (includes migrated toolbar actions)
 - **Status bar**: Shows active tool, locked state, and Cmd+K hint
+- **Accessibility**: `prefers-reduced-motion` support, focus-visible indicators, no outline suppression
 - **Responsive**: Compact tool rail at 980px, overlay sidebars at 768px
 
 ### Viewer Controls
@@ -108,7 +109,8 @@ npm run build       # TypeScript + Vite production build
 ```
 src/
   App.tsx                    # Main app shell
-  App.css                    # "Forge" dark theme (layout, panels, components)
+  App.css                    # Terminal theme (layout, panels, components)
+  theme.css                  # --kpdf-* design tokens + bridge mappings
   types.ts                   # Annotation types, tool union, shared types
   annotationPersistence.ts   # Load/save/sidecar/localStorage
   pdfExport.ts               # PDF export with flatten + attachment embedding
