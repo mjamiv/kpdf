@@ -62,8 +62,13 @@ kpdf is a React+Vite+TypeScript PDF viewer and markup tool. It uses pdfjs-dist f
 ## Git History (7 commits on main)
 - Phase 1 baseline -> WP1-A (engine) -> WP1-B+WP2 (undo/selection) -> WP3+WP4 (tools/text) -> WP3-B (new tools) -> WP5-A+WP6 (integration/workflow) -> WP5-B (tabs)
 
+### Phase 4 (UI completion + E2E)
+- CommentsPanel wired into App.tsx with toggle button, filtering, click-to-jump navigation
+- Review mode toggle: enforces select-only tool restriction, keyboard shortcut gating
+- Cloud tool scalloped border rendering using `drawCloudShape()` shared helper (arc-based)
+- Playwright E2E test infrastructure: 8 tests (5 empty-state, 3 PDF-load)
+- Scripts: `test:e2e`, `test:e2e:ui`
+
 ## Not Yet Done
-- Wire CommentsPanel and review mode toggle into App.tsx UI
-- E2E tests (Playwright)
 - Performance profiling (target: first-page <400ms, interactions >=50fps)
-- Cloud tool scalloped border rendering on canvas (currently renders as plain rect)
+- Additional E2E tests for annotation tools, export, etc.

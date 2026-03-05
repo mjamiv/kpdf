@@ -130,6 +130,3 @@ src/
 
 ## Known Limitations
 - Bundle size is large due to pdf.js worker (~1.2MB)
-- CommentsPanel and review mode toggle not yet wired into App.tsx UI
-- No E2E tests yet (Playwright planned)
-- Cloud tool renders as simple rectangle (scalloped border is visual only in export)

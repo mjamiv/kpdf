@@ -283,3 +283,14 @@ button:disabled {
   font-size: 0.85rem;
   line-height: 1.4;
 }
+
+/* Review mode */
+.toolbar.review-active button:disabled {
+  opacity: 0.35;
+}
+
+.review-toggle.active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
