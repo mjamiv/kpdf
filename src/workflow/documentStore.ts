@@ -1,4 +1,4 @@
-import type { AnnotationsByPage } from '../types';
+import type { AnnotationsByPage, PageScale } from '../types';
 
 export type DocumentTab = {
   id: string;
@@ -12,6 +12,7 @@ export type DocumentTab = {
   panY: number;
   annotationsByPage: AnnotationsByPage;
   dirty: boolean;
+  pageScales: Record<number, PageScale>;
 };
 
 export function createDocumentTab(
@@ -32,13 +33,7 @@ export function createDocumentTab(
     panY: 0,
     annotationsByPage: {},
     dirty: false,
+    pageScales: {},
   };
 }
 
-export function markDirty(tab: DocumentTab): DocumentTab {
-  return tab.dirty ? tab : { ...tab, dirty: true };
-}
-
-export function markClean(tab: DocumentTab): DocumentTab {
-  return !tab.dirty ? tab : { ...tab, dirty: false };
-}

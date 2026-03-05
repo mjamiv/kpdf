@@ -206,11 +206,8 @@ export function computeInverse(state: DocumentState, action: Action): Action {
     }
 
     case 'SET_Z_ORDER': {
-      const inverseOp = action.op === 'front' ? 'back' as const
-        : action.op === 'back' ? 'front' as const
-        : action.op === 'up' ? 'down' as const
-        : 'up' as const;
-      return { type: 'SET_Z_ORDER', page: action.page, id: action.id, op: inverseOp };
+      const inverseOps = { front: 'back', back: 'front', up: 'down', down: 'up' } as const;
+      return { type: 'SET_Z_ORDER', page: action.page, id: action.id, op: inverseOps[action.op] };
     }
 
     case 'LOCK_ANNOTATION':

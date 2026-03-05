@@ -1,26 +1,34 @@
 import type { Annotation, AnchorPosition, Point } from '../types';
-import { clamp01 } from './utils';
+import { clamp01, pointsBoundingBox } from './utils';
+
+function movePoint(p: Point, dx: number, dy: number): Point {
+  return { x: clamp01(p.x + dx), y: clamp01(p.y + dy) };
+}
 
 export function moveAnnotation(ann: Annotation, dx: number, dy: number): Annotation {
   switch (ann.type) {
     case 'pen':
-      return { ...ann, points: ann.points.map(p => ({ x: clamp01(p.x + dx), y: clamp01(p.y + dy) })) };
+    case 'polygon':
+    case 'area':
+    case 'polyline':
+      return { ...ann, points: ann.points.map(p => movePoint(p, dx, dy)) };
     case 'rectangle':
     case 'highlight':
-      return { ...ann, x: clamp01(ann.x + dx), y: clamp01(ann.y + dy) };
     case 'text':
+    case 'cloud':
+    case 'stamp':
+    case 'ellipse':
+    case 'hyperlink':
       return { ...ann, x: clamp01(ann.x + dx), y: clamp01(ann.y + dy) };
     case 'arrow':
-      return { ...ann, start: { x: clamp01(ann.start.x + dx), y: clamp01(ann.start.y + dy) }, end: { x: clamp01(ann.end.x + dx), y: clamp01(ann.end.y + dy) } };
-    case 'callout':
-      return { ...ann, box: { ...ann.box, x: clamp01(ann.box.x + dx), y: clamp01(ann.box.y + dy) }, leaderTarget: { x: clamp01(ann.leaderTarget.x + dx), y: clamp01(ann.leaderTarget.y + dy) } };
-    case 'cloud':
-      return { ...ann, x: clamp01(ann.x + dx), y: clamp01(ann.y + dy) };
     case 'measurement':
-      return { ...ann, start: { x: clamp01(ann.start.x + dx), y: clamp01(ann.start.y + dy) }, end: { x: clamp01(ann.end.x + dx), y: clamp01(ann.end.y + dy) } };
-    case 'polygon':
-      return { ...ann, points: ann.points.map(p => ({ x: clamp01(p.x + dx), y: clamp01(p.y + dy) })) };
-    case 'stamp':
+    case 'dimension':
+      return { ...ann, start: movePoint(ann.start, dx, dy), end: movePoint(ann.end, dx, dy) };
+    case 'callout':
+      return { ...ann, box: { ...ann.box, x: clamp01(ann.box.x + dx), y: clamp01(ann.box.y + dy) }, leaderTarget: movePoint(ann.leaderTarget, dx, dy) };
+    case 'angle':
+      return { ...ann, vertex: movePoint(ann.vertex, dx, dy), ray1: movePoint(ann.ray1, dx, dy), ray2: movePoint(ann.ray2, dx, dy) };
+    case 'count':
       return { ...ann, x: clamp01(ann.x + dx), y: clamp01(ann.y + dy) };
     default:
       return ann;
@@ -52,19 +60,8 @@ function resizeRect(
   return { x: nx, y: ny, width: nw, height: nh };
 }
 
-function getBoundingBox(points: Point[]): { minX: number; minY: number; maxX: number; maxY: number } {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const p of points) {
-    if (p.x < minX) minX = p.x;
-    if (p.y < minY) minY = p.y;
-    if (p.x > maxX) maxX = p.x;
-    if (p.y > maxY) maxY = p.y;
-  }
-  return { minX, minY, maxX, maxY };
-}
-
 function resizePoints(points: Point[], anchor: AnchorPosition, dx: number, dy: number): Point[] {
-  const bb = getBoundingBox(points);
+  const bb = pointsBoundingBox(points);
   const oldW = bb.maxX - bb.minX || 0.01;
   const oldH = bb.maxY - bb.minY || 0.01;
 
@@ -79,40 +76,32 @@ function resizePoints(points: Point[], anchor: AnchorPosition, dx: number, dy: n
 export function resizeAnnotation(ann: Annotation, anchor: AnchorPosition, dx: number, dy: number): Annotation {
   switch (ann.type) {
     case 'rectangle':
-    case 'highlight': {
-      const r = resizeRect(ann.x, ann.y, ann.width, ann.height, anchor, dx, dy);
-      return { ...ann, ...r };
-    }
-    case 'cloud': {
-      const r = resizeRect(ann.x, ann.y, ann.width, ann.height, anchor, dx, dy);
-      return { ...ann, ...r };
-    }
-    case 'stamp': {
-      const r = resizeRect(ann.x, ann.y, ann.width, ann.height, anchor, dx, dy);
-      return { ...ann, ...r };
-    }
+    case 'highlight':
+    case 'cloud':
+    case 'stamp':
+    case 'ellipse':
+    case 'hyperlink':
+      return { ...ann, ...resizeRect(ann.x, ann.y, ann.width, ann.height, anchor, dx, dy) };
     case 'pen':
-      return { ...ann, points: resizePoints(ann.points, anchor, dx, dy) };
     case 'polygon':
+    case 'area':
+    case 'polyline':
       return { ...ann, points: resizePoints(ann.points, anchor, dx, dy) };
-    case 'arrow': {
+    case 'arrow':
+    case 'measurement':
+    case 'dimension': {
       if (anchor === 'nw' || anchor === 'w' || anchor === 'sw') {
-        return { ...ann, start: { x: clamp01(ann.start.x + dx), y: clamp01(ann.start.y + dy) } };
+        return { ...ann, start: movePoint(ann.start, dx, dy) };
       }
-      return { ...ann, end: { x: clamp01(ann.end.x + dx), y: clamp01(ann.end.y + dy) } };
+      return { ...ann, end: movePoint(ann.end, dx, dy) };
     }
-    case 'measurement': {
-      if (anchor === 'nw' || anchor === 'w' || anchor === 'sw') {
-        return { ...ann, start: { x: clamp01(ann.start.x + dx), y: clamp01(ann.start.y + dy) } };
-      }
-      return { ...ann, end: { x: clamp01(ann.end.x + dx), y: clamp01(ann.end.y + dy) } };
-    }
-    case 'callout': {
-      const r = resizeRect(ann.box.x, ann.box.y, ann.box.width, ann.box.height, anchor, dx, dy);
-      return { ...ann, box: r };
-    }
+    case 'callout':
+      return { ...ann, box: resizeRect(ann.box.x, ann.box.y, ann.box.width, ann.box.height, anchor, dx, dy) };
     case 'text':
+    case 'count':
       return ann;
+    case 'angle':
+      return { ...ann, vertex: movePoint(ann.vertex, dx, dy), ray1: movePoint(ann.ray1, dx, dy), ray2: movePoint(ann.ray2, dx, dy) };
     default:
       return ann;
   }

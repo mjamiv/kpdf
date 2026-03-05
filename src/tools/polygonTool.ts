@@ -6,6 +6,7 @@ type PolygonDraft = {
   toolType: 'polygon';
   points: Point[];
   lastMouse: Point;
+  color: string;
 };
 
 export function isPolygonDraft(draft: unknown): draft is PolygonDraft {
@@ -25,7 +26,7 @@ const polygonTool: ToolBehavior = {
 
     if (!isPolygonDraft(draft)) {
       // Start new polygon
-      ctx.setDraft({ toolType: 'polygon', points: [e.point], lastMouse: e.point } as PolygonDraft);
+      ctx.setDraft({ toolType: 'polygon', points: [e.point], lastMouse: e.point, color: ctx.color } as PolygonDraft);
       return;
     }
 
@@ -83,7 +84,7 @@ const polygonTool: ToolBehavior = {
   renderDraft(ctx2d: CanvasRenderingContext2D, draft: unknown, w: number, h: number) {
     if (!isPolygonDraft(draft) || draft.points.length < 1) return;
 
-    ctx2d.strokeStyle = '#111827';
+    ctx2d.strokeStyle = (draft as PolygonDraft).color || '#111827';
     ctx2d.lineWidth = Math.max(THICKNESS * w, 1.5);
     ctx2d.lineJoin = 'round';
 

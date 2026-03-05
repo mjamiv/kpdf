@@ -1,4 +1,4 @@
-import type { AnnotationsByPage } from '../types';
+import type { Annotation, AnnotationsByPage } from '../types';
 
 export type ReportRow = {
   page: number;
@@ -9,6 +9,7 @@ export type ReportRow = {
   status: string;
   createdAt: string;
   locked: boolean;
+  measurement?: string;
 };
 
 /**
@@ -29,6 +30,7 @@ export function generateReportRows(annotationsByPage: AnnotationsByPage): Report
         status: ann.status ?? '',
         createdAt: ann.createdAt,
         locked: ann.locked,
+        measurement: computeMeasurement(ann),
       });
     }
   }
@@ -39,11 +41,50 @@ export function generateReportRows(annotationsByPage: AnnotationsByPage): Report
   });
 }
 
+function computeMeasurement(ann: Annotation): string | undefined {
+  if (ann.type === 'measurement' || ann.type === 'dimension') {
+    const dx = ann.end.x - ann.start.x;
+    const dy = ann.end.y - ann.start.y;
+    const dist = Math.sqrt(dx * dx + dy * dy) * ann.scale;
+    return `${dist.toFixed(2)} ${ann.unit}`;
+  }
+  if (ann.type === 'area') {
+    // Shoelace formula on normalized coords, scaled
+    let area = 0;
+    const pts = ann.points;
+    for (let i = 0; i < pts.length; i++) {
+      const j = (i + 1) % pts.length;
+      area += pts[i].x * pts[j].y - pts[j].x * pts[i].y;
+    }
+    area = Math.abs(area / 2) * ann.scale * ann.scale;
+    // Perimeter
+    let perimeter = 0;
+    for (let i = 0; i < pts.length; i++) {
+      const j = (i + 1) % pts.length;
+      perimeter += Math.sqrt((pts[j].x - pts[i].x) ** 2 + (pts[j].y - pts[i].y) ** 2);
+    }
+    perimeter *= ann.scale;
+    return `Area: ${area.toFixed(2)} ${ann.unit}\u00B2, Perimeter: ${perimeter.toFixed(2)} ${ann.unit}`;
+  }
+  if (ann.type === 'angle') {
+    const v1 = { x: ann.ray1.x - ann.vertex.x, y: ann.ray1.y - ann.vertex.y };
+    const v2 = { x: ann.ray2.x - ann.vertex.x, y: ann.ray2.y - ann.vertex.y };
+    const dot = v1.x * v2.x + v1.y * v2.y;
+    const m1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y);
+    const m2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y);
+    if (m1 > 0 && m2 > 0) {
+      const angle = Math.acos(Math.min(1, Math.max(-1, dot / (m1 * m2)))) * (180 / Math.PI);
+      return `${angle.toFixed(1)}\u00B0`;
+    }
+  }
+  return undefined;
+}
+
 /**
  * Convert report rows to CSV string.
  */
 export function toCSV(rows: ReportRow[]): string {
-  const headers = ['Page', 'Type', 'Author', 'Color', 'Comment', 'Status', 'Created At', 'Locked'];
+  const headers = ['Page', 'Type', 'Author', 'Color', 'Comment', 'Status', 'Created At', 'Locked', 'Measurement'];
   const lines = [headers.join(',')];
 
   for (const row of rows) {
@@ -56,6 +97,7 @@ export function toCSV(rows: ReportRow[]): string {
       row.status,
       row.createdAt,
       String(row.locked),
+      escapeCsvField(row.measurement ?? ''),
     ];
     lines.push(values.join(','));
   }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeSnap } from './snapping';
+import { computeSnap, constrainTo45 } from './snapping';
 import type { Annotation, BaseAnnotation } from '../types';
 
 const base: BaseAnnotation = {
@@ -69,5 +69,40 @@ describe('computeSnap', () => {
     const result = computeSnap({ x: 0.5, y: 0.3 }, new Set(), [], 0.01);
     expect(result.snappedPoint).toEqual({ x: 0.5, y: 0.3 });
     expect(result.guides.length).toBe(0);
+  });
+});
+
+describe('constrainTo45', () => {
+  const start = { x: 0.5, y: 0.5 };
+
+  it('snaps to 0 degrees (right)', () => {
+    const result = constrainTo45(start, { x: 0.7, y: 0.51 });
+    expect(result.x).toBeCloseTo(0.7, 1);
+    expect(result.y).toBeCloseTo(0.5, 1);
+  });
+
+  it('snaps to 90 degrees (down)', () => {
+    const result = constrainTo45(start, { x: 0.51, y: 0.7 });
+    expect(result.x).toBeCloseTo(0.5, 1);
+    expect(result.y).toBeCloseTo(0.7, 1);
+  });
+
+  it('snaps to 45 degrees', () => {
+    const result = constrainTo45(start, { x: 0.7, y: 0.71 });
+    const dist = Math.sqrt(0.2 * 0.2 + 0.21 * 0.21);
+    expect(result.x - start.x).toBeCloseTo(result.y - start.y, 5);
+    expect(Math.sqrt((result.x - start.x) ** 2 + (result.y - start.y) ** 2)).toBeCloseTo(dist, 5);
+  });
+
+  it('snaps to 180 degrees (left)', () => {
+    const result = constrainTo45(start, { x: 0.3, y: 0.49 });
+    expect(result.x).toBeCloseTo(0.3, 1);
+    expect(result.y).toBeCloseTo(0.5, 1);
+  });
+
+  it('returns start point when end equals start', () => {
+    const result = constrainTo45(start, start);
+    expect(result.x).toBeCloseTo(start.x, 5);
+    expect(result.y).toBeCloseTo(start.y, 5);
   });
 });

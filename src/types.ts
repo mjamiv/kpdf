@@ -1,4 +1,4 @@
-export type Tool = 'pen' | 'rectangle' | 'highlight' | 'text' | 'select' | 'arrow' | 'callout' | 'cloud' | 'measurement' | 'polygon' | 'stamp';
+export type Tool = 'pen' | 'rectangle' | 'highlight' | 'text' | 'select' | 'arrow' | 'callout' | 'cloud' | 'measurement' | 'polygon' | 'stamp' | 'area' | 'angle' | 'count' | 'dimension' | 'ellipse' | 'polyline' | 'hyperlink';
 
 export type Point = {
   x: number;
@@ -22,6 +22,7 @@ export type PenAnnotation = BaseAnnotation & {
   type: 'pen';
   points: Point[];
   thickness: number;
+  strokeWidths?: number[];
 };
 
 export type RectAnnotation = BaseAnnotation & {
@@ -39,6 +40,9 @@ export type TextAnnotation = BaseAnnotation & {
   y: number;
   text: string;
   fontSize: number;
+  fontWeight?: 'normal' | 'bold';
+  fontStyle?: 'normal' | 'italic';
+  fontFamily?: string;
 };
 
 export type ArrowAnnotation = BaseAnnotation & {
@@ -89,6 +93,67 @@ export type StampAnnotation = BaseAnnotation & {
   height: number;
   stampId: string;
   label: string;
+  imageUrl?: string;
+};
+
+export type EllipseAnnotation = BaseAnnotation & {
+  type: 'ellipse';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  thickness: number;
+};
+
+export type AreaAnnotation = BaseAnnotation & {
+  type: 'area';
+  points: Point[];
+  thickness: number;
+  scale: number;
+  unit: string;
+};
+
+export type AngleAnnotation = BaseAnnotation & {
+  type: 'angle';
+  vertex: Point;
+  ray1: Point;
+  ray2: Point;
+  thickness: number;
+};
+
+export type CountAnnotation = BaseAnnotation & {
+  type: 'count';
+  x: number;
+  y: number;
+  number: number;
+  groupId: string;
+  radius: number;
+};
+
+export type DimensionAnnotation = BaseAnnotation & {
+  type: 'dimension';
+  start: Point;
+  end: Point;
+  offset: number;
+  thickness: number;
+  scale: number;
+  unit: string;
+};
+
+export type PolylineAnnotation = BaseAnnotation & {
+  type: 'polyline';
+  points: Point[];
+  thickness: number;
+};
+
+export type HyperlinkAnnotation = BaseAnnotation & {
+  type: 'hyperlink';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  targetPage: number;
+  label: string;
 };
 
 export type Annotation =
@@ -100,9 +165,22 @@ export type Annotation =
   | CloudAnnotation
   | MeasurementAnnotation
   | PolygonAnnotation
-  | StampAnnotation;
+  | StampAnnotation
+  | EllipseAnnotation
+  | AreaAnnotation
+  | AngleAnnotation
+  | CountAnnotation
+  | DimensionAnnotation
+  | PolylineAnnotation
+  | HyperlinkAnnotation;
 
 export type AnchorPosition = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
+
+export type PageScale = {
+  pixelDistance: number;
+  realDistance: number;
+  unit: string;
+};
 
 export type AnnotationDocumentV2 = {
   schemaVersion: 2;
@@ -110,6 +188,7 @@ export type AnnotationDocumentV2 = {
   exportedAt: string;
   exportedBy: string;
   pages: Record<string, Annotation[]>;
+  pageScales?: Record<string, PageScale>;
 };
 
 export type AnnotationsByPage = Record<number, Annotation[]>;

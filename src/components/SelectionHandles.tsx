@@ -73,7 +73,7 @@ export default function SelectionHandles({
         top: top - 1,
         width: width + 2,
         height: height + 2,
-        border: '1px dashed #3b82f6',
+        border: '1.5px dashed #3b82f6',
         pointerEvents: 'none',
       }} />
 
@@ -87,8 +87,10 @@ export default function SelectionHandles({
             top: y - HANDLE_SIZE / 2,
             width: HANDLE_SIZE,
             height: HANDLE_SIZE,
-            background: '#fff',
-            border: '1px solid #3b82f6',
+            background: '#ffffff',
+            border: '1.5px solid #3b82f6',
+            borderRadius: '2px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
             cursor: anchorCursors[anchor],
             pointerEvents: 'auto',
           }}

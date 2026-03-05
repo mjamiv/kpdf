@@ -40,7 +40,7 @@ describe('toCSV', () => {
     }];
     const csv = toCSV(rows);
     const lines = csv.split('\n');
-    expect(lines[0]).toBe('Page,Type,Author,Color,Comment,Status,Created At,Locked');
+    expect(lines[0]).toBe('Page,Type,Author,Color,Comment,Status,Created At,Locked,Measurement');
     expect(lines[1]).toContain('rectangle');
     expect(lines[1]).toContain('tester');
   });

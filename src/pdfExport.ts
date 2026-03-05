@@ -1,5 +1,6 @@
-import { PDFDocument, rgb } from 'pdf-lib';
+import type { PDFDocument as PDFDocumentType, PDFPage } from 'pdf-lib';
 import type { Annotation, Point } from './types';
+import { clamp01 } from './engine/utils';
 
 const EPSILON = 1e-6;
 
@@ -8,12 +9,6 @@ export function toPdfPoint(point: Point, pageWidth: number, pageHeight: number):
     x: point.x * pageWidth,
     y: pageHeight - point.y * pageHeight,
   };
-}
-
-export function clamp01(value: number): number {
-  if (value < 0) return 0;
-  if (value > 1) return 1;
-  return value;
 }
 
 function parseHex(hex: string): { r: number; g: number; b: number } {
@@ -49,15 +44,17 @@ export function toLineSegments(points: Point[]): Array<{ start: Point; end: Poin
   return segments;
 }
 
-function drawAnnotations(
-  page: ReturnType<PDFDocument['getPages']>[number],
+async function drawAnnotations(
+  page: PDFPage,
   annotations: Annotation[],
-): void {
+  rgbFn: typeof import('pdf-lib').rgb,
+  pdfDoc?: PDFDocumentType,
+): Promise<void> {
   const { width, height } = page.getSize();
 
-  annotations.forEach((annotation) => {
+  for (const annotation of annotations) {
     const parsed = parseHex(annotation.color);
-    const color = rgb(parsed.r, parsed.g, parsed.b);
+    const color = rgbFn(parsed.r, parsed.g, parsed.b);
 
     switch (annotation.type) {
       case 'pen': {
@@ -258,22 +255,184 @@ function drawAnnotations(
         const sYTop = clamp01(annotation.y) * height;
         const sY = height - sYTop - sH;
 
+        // Try to embed image if present
+        let imageEmbedded = false;
+        if (annotation.imageUrl && pdfDoc) {
+          try {
+            const dataUrl = annotation.imageUrl;
+            const base64 = dataUrl.split(',')[1];
+            if (base64) {
+              const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+              const isPng = dataUrl.includes('image/png') || dataUrl.includes('image/svg');
+              const img = isPng
+                ? await pdfDoc.embedPng(bytes)
+                : await pdfDoc.embedJpg(bytes);
+              page.drawImage(img, { x: sX, y: sY, width: sW, height: sH });
+              imageEmbedded = true;
+            }
+          } catch {
+            // Fall back to text rendering
+          }
+        }
+
+        if (!imageEmbedded) {
+          page.drawRectangle({
+            x: sX,
+            y: sY,
+            width: sW,
+            height: sH,
+            borderColor: color,
+            borderWidth: 1,
+            opacity: 0,
+          });
+
+          const sTextSize = Math.max(Math.min(sW / Math.max(annotation.label.length, 1) * 1.5, sH * 0.6), 8);
+          page.drawText(annotation.label, {
+            x: sX + sW / 2 - (annotation.label.length * sTextSize * 0.3),
+            y: sY + sH / 2 - sTextSize / 2,
+            color,
+            size: sTextSize,
+          });
+        }
+        break;
+      }
+
+      case 'area': {
+        const aSegments = toLineSegments(annotation.points);
+        const aThickness = Math.max(annotation.thickness * width, 0.5);
+        aSegments.forEach((seg) => {
+          const aStart = toPdfPoint(seg.start, width, height);
+          const aEnd = toPdfPoint(seg.end, width, height);
+          page.drawLine({ start: aStart, end: aEnd, thickness: aThickness, color });
+        });
+        if (annotation.points.length >= 3) {
+          const first = toPdfPoint(annotation.points[0], width, height);
+          const last = toPdfPoint(annotation.points[annotation.points.length - 1], width, height);
+          page.drawLine({ start: last, end: first, thickness: aThickness, color });
+          // Area label
+          let acx = 0, acy = 0;
+          for (const p of annotation.points) { acx += p.x; acy += p.y; }
+          acx /= annotation.points.length; acy /= annotation.points.length;
+          let areaSum = 0;
+          for (let i = 0; i < annotation.points.length; i++) {
+            const j = (i + 1) % annotation.points.length;
+            areaSum += annotation.points[i].x * annotation.points[j].y - annotation.points[j].x * annotation.points[i].y;
+          }
+          const areaVal = Math.abs(areaSum) / 2 * annotation.scale;
+          const ac = toPdfPoint({ x: acx, y: acy }, width, height);
+          page.drawText(`${areaVal.toFixed(2)} ${annotation.unit}`, { x: ac.x, y: ac.y, color, size: 10 });
+        }
+        break;
+      }
+
+      case 'angle': {
+        const angThick = Math.max(annotation.thickness * width, 0.5);
+        const v = toPdfPoint(annotation.vertex, width, height);
+        const r1 = toPdfPoint(annotation.ray1, width, height);
+        const r2 = toPdfPoint(annotation.ray2, width, height);
+        page.drawLine({ start: v, end: r1, thickness: angThick, color });
+        page.drawLine({ start: v, end: r2, thickness: angThick, color });
+        const a1 = Math.atan2(annotation.ray1.y - annotation.vertex.y, annotation.ray1.x - annotation.vertex.x);
+        const a2 = Math.atan2(annotation.ray2.y - annotation.vertex.y, annotation.ray2.x - annotation.vertex.x);
+        let deg = Math.abs(a1 - a2) * (180 / Math.PI);
+        if (deg > 180) deg = 360 - deg;
+        const midA = (a1 + a2) / 2;
+        const lx = annotation.vertex.x + 0.03 * Math.cos(midA);
+        const ly = annotation.vertex.y + 0.03 * Math.sin(midA);
+        const lp = toPdfPoint({ x: lx, y: ly }, width, height);
+        page.drawText(`${deg.toFixed(1)}°`, { x: lp.x, y: lp.y, color, size: 10 });
+        break;
+      }
+
+      case 'count': {
+        const cr = annotation.radius * width;
+        const cp = toPdfPoint({ x: annotation.x, y: annotation.y }, width, height);
+        page.drawCircle({ x: cp.x, y: cp.y, size: cr, color, opacity: 0.8 });
+        page.drawText(`${annotation.number}`, {
+          x: cp.x - cr * 0.3,
+          y: cp.y - cr * 0.3,
+          color: rgbFn(1, 1, 1),
+          size: Math.max(8, cr),
+        });
+        break;
+      }
+
+      case 'dimension': {
+        const ddx = annotation.end.x - annotation.start.x;
+        const ddy = annotation.end.y - annotation.start.y;
+        const dLen = Math.sqrt(ddx * ddx + ddy * ddy);
+        if (dLen > 0) {
+          const nx = -ddy / dLen, ny = ddx / dLen;
+          const os = annotation.offset;
+          const ds = toPdfPoint({ x: annotation.start.x + nx * os, y: annotation.start.y + ny * os }, width, height);
+          const de = toPdfPoint({ x: annotation.end.x + nx * os, y: annotation.end.y + ny * os }, width, height);
+          const dThick = Math.max(annotation.thickness * width, 0.5);
+          page.drawLine({ start: ds, end: de, thickness: dThick, color });
+          // Tick marks
+          const ts = 0.008 * width;
+          page.drawLine({ start: { x: ds.x - nx * ts, y: ds.y + ny * ts }, end: { x: ds.x + nx * ts, y: ds.y - ny * ts }, thickness: dThick, color });
+          page.drawLine({ start: { x: de.x - nx * ts, y: de.y + ny * ts }, end: { x: de.x + nx * ts, y: de.y - ny * ts }, thickness: dThick, color });
+          // Label
+          const dist = dLen * annotation.scale;
+          const dm = { x: (ds.x + de.x) / 2, y: (ds.y + de.y) / 2 + 4 };
+          page.drawText(`${dist.toFixed(1)} ${annotation.unit}`, { x: dm.x, y: dm.y, color, size: 10 });
+        }
+        break;
+      }
+
+      case 'ellipse': {
+        const eX = clamp01(annotation.x) * width;
+        const eW = clamp01(annotation.width) * width;
+        const eH = clamp01(annotation.height) * height;
+        const eYTop = clamp01(annotation.y) * height;
+        const eY = height - eYTop - eH;
+        page.drawEllipse({
+          x: eX + eW / 2,
+          y: eY + eH / 2,
+          xScale: eW / 2,
+          yScale: eH / 2,
+          borderColor: color,
+          borderWidth: Math.max(annotation.thickness * width, 0.5),
+          opacity: 0,
+        });
+        break;
+      }
+
+      case 'polyline': {
+        const plSegments = toLineSegments(annotation.points);
+        const plThickness = Math.max(annotation.thickness * width, 0.5);
+        plSegments.forEach((seg) => {
+          const plStart = toPdfPoint(seg.start, width, height);
+          const plEnd = toPdfPoint(seg.end, width, height);
+          page.drawLine({ start: plStart, end: plEnd, thickness: plThickness, color });
+        });
+        break;
+      }
+
+      case 'hyperlink': {
+        // Hyperlinks are interactive-only; draw a visible link box when flattening
+        const hlX = clamp01(annotation.x) * width;
+        const hlW = clamp01(annotation.width) * width;
+        const hlH = clamp01(annotation.height) * height;
+        const hlYTop = clamp01(annotation.y) * height;
+        const hlY = height - hlYTop - hlH;
+
         page.drawRectangle({
-          x: sX,
-          y: sY,
-          width: sW,
-          height: sH,
+          x: hlX,
+          y: hlY,
+          width: hlW,
+          height: hlH,
           borderColor: color,
           borderWidth: 1,
           opacity: 0,
         });
 
-        const sTextSize = Math.max(Math.min(sW / Math.max(annotation.label.length, 1) * 1.5, sH * 0.6), 8);
+        const hlTextSize = Math.max(Math.min(hlW / Math.max(annotation.label.length, 1) * 1.5, hlH * 0.6), 8);
         page.drawText(annotation.label, {
-          x: sX + sW / 2 - (annotation.label.length * sTextSize * 0.3),
-          y: sY + sH / 2 - sTextSize / 2,
+          x: hlX + 2,
+          y: hlY + hlH / 2 - hlTextSize / 2,
           color,
-          size: sTextSize,
+          size: hlTextSize,
         });
         break;
       }
@@ -281,7 +440,7 @@ function drawAnnotations(
       default:
         break;
     }
-  });
+  }
 }
 
 type EmbeddedAttachment = {
@@ -313,15 +472,16 @@ export async function exportPdf(
   annotationsByPage: Record<number, Annotation[]>,
   options: ExportOptions,
 ): Promise<ExportPdfResult> {
-  const pdfDoc = await PDFDocument.load(originalBytes);
+  const { PDFDocument, rgb } = await import('pdf-lib');
+  const pdfDoc: PDFDocumentType = await PDFDocument.load(originalBytes);
   const pages = pdfDoc.getPages();
 
   if (options.flatten) {
-    pages.forEach((page, pageIndex) => {
+    for (let pageIndex = 0; pageIndex < pages.length; pageIndex++) {
       const annotations = annotationsByPage[pageIndex + 1] ?? [];
-      if (annotations.length === 0) return;
-      drawAnnotations(page, annotations);
-    });
+      if (annotations.length === 0) continue;
+      await drawAnnotations(pages[pageIndex], annotations, rgb, pdfDoc);
+    }
   }
 
   let persistence: ExportPersistenceResult = {

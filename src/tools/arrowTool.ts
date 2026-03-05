@@ -1,6 +1,7 @@
 import type { ToolBehavior, ToolContext, NormalizedPointerEvent } from './registry';
 import type { Point } from '../types';
 import { registerTool } from './registry';
+import { constrainTo45 } from './snapping';
 
 type ArrowDraft = {
   toolType: 'arrow';
@@ -27,7 +28,8 @@ const arrowTool: ToolBehavior = {
   onPointerMove(ctx: ToolContext, e: NormalizedPointerEvent) {
     ctx.setDraft((prev: unknown) => {
       if (!isArrowDraft(prev)) return prev;
-      return { ...prev, end: e.point };
+      const end = e.shiftKey ? constrainTo45(prev.start, e.point) : e.point;
+      return { ...prev, end };
     });
   },
 

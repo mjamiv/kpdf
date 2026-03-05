@@ -1,4 +1,5 @@
-import type { Point, Annotation } from '../types.ts';
+import type { Point, Annotation } from '../types';
+import { pointsBoundingBox } from './utils';
 
 export function distanceToLineSegment(point: Point, a: Point, b: Point): number {
   const dx = b.x - a.x;
@@ -34,19 +35,20 @@ export function pointInPolygon(point: Point, vertices: Point[]): boolean {
 
 export function boundingBox(annotation: Annotation): { x: number; y: number; width: number; height: number } {
   switch (annotation.type) {
-    case 'pen': {
+    case 'pen':
+    case 'polygon':
+    case 'area':
+    case 'polyline': {
       if (annotation.points.length === 0) return { x: 0, y: 0, width: 0, height: 0 };
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      for (const p of annotation.points) {
-        if (p.x < minX) minX = p.x;
-        if (p.y < minY) minY = p.y;
-        if (p.x > maxX) maxX = p.x;
-        if (p.y > maxY) maxY = p.y;
-      }
+      const { minX, minY, maxX, maxY } = pointsBoundingBox(annotation.points);
       return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
     }
     case 'rectangle':
     case 'highlight':
+    case 'cloud':
+    case 'stamp':
+    case 'ellipse':
+    case 'hyperlink':
       return { x: annotation.x, y: annotation.y, width: annotation.width, height: annotation.height };
     case 'text': {
       const h = annotation.fontSize * 1.2;
@@ -54,7 +56,8 @@ export function boundingBox(annotation: Annotation): { x: number; y: number; wid
       return { x: annotation.x, y: annotation.y - h, width: w, height: h };
     }
     case 'arrow':
-    case 'measurement': {
+    case 'measurement':
+    case 'dimension': {
       const minX = Math.min(annotation.start.x, annotation.end.x);
       const minY = Math.min(annotation.start.y, annotation.end.y);
       const maxX = Math.max(annotation.start.x, annotation.end.x);
@@ -72,21 +75,30 @@ export function boundingBox(annotation: Annotation): { x: number; y: number; wid
       const maxY = Math.max(by2, annotation.leaderTarget.y);
       return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
     }
-    case 'cloud':
-    case 'stamp':
-      return { x: annotation.x, y: annotation.y, width: annotation.width, height: annotation.height };
-    case 'polygon': {
-      if (annotation.points.length === 0) return { x: 0, y: 0, width: 0, height: 0 };
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      for (const p of annotation.points) {
-        if (p.x < minX) minX = p.x;
-        if (p.y < minY) minY = p.y;
-        if (p.x > maxX) maxX = p.x;
-        if (p.y > maxY) maxY = p.y;
-      }
+    case 'angle': {
+      const pts = [annotation.vertex, annotation.ray1, annotation.ray2];
+      const { minX, minY, maxX, maxY } = pointsBoundingBox(pts);
       return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
     }
+    case 'count':
+      return { x: annotation.x - annotation.radius, y: annotation.y - annotation.radius, width: annotation.radius * 2, height: annotation.radius * 2 };
   }
+}
+
+function pointInRect(point: Point, x: number, y: number, width: number, height: number, tolerance: number): boolean {
+  return (
+    point.x >= x - tolerance &&
+    point.x <= x + width + tolerance &&
+    point.y >= y - tolerance &&
+    point.y <= y + height + tolerance
+  );
+}
+
+function pointInEllipse(point: Point, cx: number, cy: number, rx: number, ry: number, tolerance: number): boolean {
+  const dx = point.x - cx;
+  const dy = point.y - cy;
+  const v = (dx * dx) / ((rx + tolerance) * (rx + tolerance)) + (dy * dy) / ((ry + tolerance) * (ry + tolerance));
+  return v <= 1;
 }
 
 export function pointInAnnotation(point: Point, annotation: Annotation, tolerance: number = 0.01): boolean {
@@ -106,46 +118,33 @@ export function pointInAnnotation(point: Point, annotation: Annotation, toleranc
     }
     case 'rectangle':
     case 'highlight':
-      return (
-        point.x >= annotation.x - tolerance &&
-        point.x <= annotation.x + annotation.width + tolerance &&
-        point.y >= annotation.y - tolerance &&
-        point.y <= annotation.y + annotation.height + tolerance
-      );
+    case 'cloud':
+    case 'stamp':
+    case 'hyperlink':
+      return pointInRect(point, annotation.x, annotation.y, annotation.width, annotation.height, tolerance);
+    case 'ellipse': {
+      const cx = annotation.x + annotation.width / 2;
+      const cy = annotation.y + annotation.height / 2;
+      return pointInEllipse(point, cx, cy, annotation.width / 2, annotation.height / 2, tolerance);
+    }
     case 'text': {
       const bb = boundingBox(annotation);
-      return (
-        point.x >= bb.x - tolerance &&
-        point.x <= bb.x + bb.width + tolerance &&
-        point.y >= bb.y - tolerance &&
-        point.y <= bb.y + bb.height + tolerance
-      );
+      return pointInRect(point, bb.x, bb.y, bb.width, bb.height, tolerance);
     }
     case 'arrow':
-    case 'measurement': {
+    case 'measurement':
+    case 'dimension': {
       const hitDist = Math.max(annotation.thickness * 3, tolerance);
       return distanceToLineSegment(point, annotation.start, annotation.end) < hitDist;
     }
     case 'callout': {
       const box = annotation.box;
-      const inBox =
-        point.x >= box.x - tolerance &&
-        point.x <= box.x + box.width + tolerance &&
-        point.y >= box.y - tolerance &&
-        point.y <= box.y + box.height + tolerance;
-      if (inBox) return true;
+      if (pointInRect(point, box.x, box.y, box.width, box.height, tolerance)) return true;
       const boxCenter: Point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
       return distanceToLineSegment(point, boxCenter, annotation.leaderTarget) < tolerance;
     }
-    case 'cloud':
-    case 'stamp':
-      return (
-        point.x >= annotation.x - tolerance &&
-        point.x <= annotation.x + annotation.width + tolerance &&
-        point.y >= annotation.y - tolerance &&
-        point.y <= annotation.y + annotation.height + tolerance
-      );
-    case 'polygon': {
+    case 'polygon':
+    case 'area': {
       if (annotation.points.length < 2) return false;
       if (annotation.points.length >= 3 && pointInPolygon(point, annotation.points)) return true;
       for (let i = 0; i < annotation.points.length - 1; i++) {
@@ -153,12 +152,31 @@ export function pointInAnnotation(point: Point, annotation: Annotation, toleranc
           return true;
         }
       }
-      if (annotation.closed && annotation.points.length >= 3) {
+      if (annotation.points.length >= 3) {
         if (distanceToLineSegment(point, annotation.points[annotation.points.length - 1], annotation.points[0]) < tolerance) {
           return true;
         }
       }
       return false;
+    }
+    case 'polyline': {
+      if (annotation.points.length < 2) return false;
+      for (let i = 0; i < annotation.points.length - 1; i++) {
+        if (distanceToLineSegment(point, annotation.points[i], annotation.points[i + 1]) < tolerance) {
+          return true;
+        }
+      }
+      return false;
+    }
+    case 'angle': {
+      if (distanceToLineSegment(point, annotation.vertex, annotation.ray1) < tolerance) return true;
+      if (distanceToLineSegment(point, annotation.vertex, annotation.ray2) < tolerance) return true;
+      return false;
+    }
+    case 'count': {
+      const dx = point.x - annotation.x;
+      const dy = point.y - annotation.y;
+      return Math.sqrt(dx * dx + dy * dy) < annotation.radius + tolerance;
     }
   }
 }

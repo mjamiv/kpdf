@@ -1,6 +1,7 @@
 import type { ToolBehavior, ToolContext, NormalizedPointerEvent } from './registry';
 import type { Point } from '../types';
 import { registerTool } from './registry';
+import { constrainTo45 } from './snapping';
 
 type MeasurementDraft = {
   toolType: 'measurement';
@@ -26,7 +27,8 @@ const measurementTool: ToolBehavior = {
   onPointerMove(ctx: ToolContext, e: NormalizedPointerEvent) {
     ctx.setDraft((prev: unknown) => {
       if (!isMeasurementDraft(prev)) return prev;
-      return { ...prev, end: e.point };
+      const end = e.shiftKey ? constrainTo45(prev.start, e.point) : e.point;
+      return { ...prev, end };
     });
   },
 
@@ -54,8 +56,8 @@ const measurementTool: ToolBehavior = {
         start: draft.start,
         end: draft.end,
         thickness: THICKNESS,
-        scale: 1,
-        unit: 'px',
+        scale: ctx.pageScale ? ctx.pageScale.realDistance / ctx.pageScale.pixelDistance : 1,
+        unit: ctx.pageScale ? ctx.pageScale.unit : 'px',
       },
     });
     ctx.setDraft(null);

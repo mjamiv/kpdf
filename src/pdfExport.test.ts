@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { clamp01, toLineSegments, toPdfPoint } from './pdfExport';
+import { toLineSegments, toPdfPoint } from './pdfExport';
+import { clamp01 } from './engine/utils';
 
 describe('pdf export helpers', () => {
   it('maps normalized points to PDF coordinates', () => {

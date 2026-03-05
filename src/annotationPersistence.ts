@@ -1,4 +1,4 @@
-import type { Annotation, AnnotationDocumentV2, AnnotationsByPage, ArrowAnnotation, CalloutAnnotation, CloudAnnotation, MeasurementAnnotation, PolygonAnnotation, StampAnnotation } from './types';
+import type { Annotation, AnnotationDocumentV2, AnnotationsByPage, ArrowAnnotation, CalloutAnnotation, CloudAnnotation, MeasurementAnnotation, PolygonAnnotation, StampAnnotation, EllipseAnnotation, AreaAnnotation, AngleAnnotation, CountAnnotation, DimensionAnnotation, PolylineAnnotation, HyperlinkAnnotation } from './types';
 
 export const SCHEMA_VERSION = 2;
 export const PDF_METADATA_PREFIX = 'KPDF_ANN_V2:';
@@ -123,6 +123,46 @@ function isAnnotation(value: unknown): value is Annotation {
     const a = annotation as Partial<StampAnnotation>;
     return [a.x, a.y, a.width, a.height].every((f) => typeof f === 'number')
       && typeof a.stampId === 'string' && typeof a.label === 'string';
+  }
+
+  if (annotation.type === 'ellipse') {
+    const a = annotation as Partial<EllipseAnnotation>;
+    return [a.x, a.y, a.width, a.height, a.thickness].every((f) => typeof f === 'number');
+  }
+
+  if (annotation.type === 'area') {
+    const a = annotation as Partial<AreaAnnotation>;
+    return Array.isArray(a.points) && a.points.every(isPoint)
+      && typeof a.thickness === 'number' && typeof a.scale === 'number' && typeof a.unit === 'string';
+  }
+
+  if (annotation.type === 'angle') {
+    const a = annotation as Partial<AngleAnnotation>;
+    return isPoint(a.vertex) && isPoint(a.ray1) && isPoint(a.ray2) && typeof a.thickness === 'number';
+  }
+
+  if (annotation.type === 'count') {
+    const a = annotation as Partial<CountAnnotation>;
+    return [a.x, a.y, a.number, a.radius].every((f) => typeof f === 'number')
+      && typeof a.groupId === 'string';
+  }
+
+  if (annotation.type === 'dimension') {
+    const a = annotation as Partial<DimensionAnnotation>;
+    return isPoint(a.start) && isPoint(a.end)
+      && typeof a.offset === 'number' && typeof a.thickness === 'number'
+      && typeof a.scale === 'number' && typeof a.unit === 'string';
+  }
+
+  if (annotation.type === 'polyline') {
+    const a = annotation as Partial<PolylineAnnotation>;
+    return Array.isArray(a.points) && a.points.every(isPoint) && typeof a.thickness === 'number';
+  }
+
+  if (annotation.type === 'hyperlink') {
+    const a = annotation as Partial<HyperlinkAnnotation>;
+    return [a.x, a.y, a.width, a.height].every((f) => typeof f === 'number')
+      && typeof a.targetPage === 'number' && typeof a.label === 'string';
   }
 
   return false;

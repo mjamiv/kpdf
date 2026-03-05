@@ -56,9 +56,3 @@ export function getCommentAuthors(comments: CommentEntry[]): string[] {
   return [...new Set(comments.map((c) => c.annotation.author))].sort();
 }
 
-/**
- * Get unique annotation types from comments.
- */
-export function getCommentTypes(comments: CommentEntry[]): string[] {
-  return [...new Set(comments.map((c) => c.annotation.type))].sort();
-}

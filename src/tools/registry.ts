@@ -1,4 +1,4 @@
-import type { Annotation, Tool, Point } from '../types';
+import type { Annotation, Tool, Point, PageScale } from '../types';
 import type { Action } from '../engine/actions';
 import type { SelectionState } from '../engine/selection';
 
@@ -21,6 +21,7 @@ export type ToolContext = {
   setSelection(sel: SelectionState): void;
   nextZIndex(): number;
   randomId(): string;
+  pageScale?: PageScale;
 };
 
 export type ToolBehavior = {

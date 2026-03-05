@@ -219,4 +219,119 @@ describe('computeInverse', () => {
       expect(inverse.actions[1].type).toBe('ADD_ANNOTATION');
     }
   });
+
+  it('RESIZE -> RESIZE with negated deltas', () => {
+    const state = emptyState();
+    const action: Action = { type: 'RESIZE_ANNOTATION', page: 1, id: 'a1', anchor: 'se', dx: 0.1, dy: 0.2 };
+    const inverse = computeInverse(state, action);
+    expect(inverse.type).toBe('RESIZE_ANNOTATION');
+    if (inverse.type === 'RESIZE_ANNOTATION') {
+      expect(inverse.dx).toBe(-0.1);
+      expect(inverse.dy).toBe(-0.2);
+      expect(inverse.anchor).toBe('se');
+    }
+  });
+
+  it('LOCK -> LOCK with toggled value', () => {
+    const state: DocumentState = { annotationsByPage: { 1: [ann1] } };
+    const action: Action = { type: 'LOCK_ANNOTATION', page: 1, id: 'a1', locked: true };
+    const inverse = computeInverse(state, action);
+    expect(inverse.type).toBe('LOCK_ANNOTATION');
+    if (inverse.type === 'LOCK_ANNOTATION') {
+      expect(inverse.locked).toBe(false);
+    }
+  });
+});
+
+describe('computeInverse roundtrip', () => {
+  it('ADD → inverse → restores original state', () => {
+    const state = emptyState();
+    const action: Action = { type: 'ADD_ANNOTATION', page: 1, annotation: ann1 };
+    const after = annotationReducer(state, action);
+    const inverse = computeInverse(state, action);
+    const restored = annotationReducer(after, inverse);
+    expect(restored.annotationsByPage[1] ?? []).toEqual([]);
+  });
+
+  it('REMOVE → inverse → restores original state', () => {
+    const state: DocumentState = { annotationsByPage: { 1: [ann1, ann2] } };
+    const action: Action = { type: 'REMOVE_ANNOTATION', page: 1, id: 'a1', removed: ann1 };
+    const after = annotationReducer(state, action);
+    const inverse = computeInverse(state, action);
+    const restored = annotationReducer(after, inverse);
+    expect(restored.annotationsByPage[1]).toHaveLength(2);
+    const ids = restored.annotationsByPage[1]!.map((a) => a.id).sort();
+    expect(ids).toEqual(['a1', 'a2']);
+  });
+
+  it('MOVE → inverse → restores original state', () => {
+    const rectAnn: Annotation = {
+      id: 'r1', type: 'rectangle', zIndex: 1, color: '#f00', author: 'test',
+      createdAt: '2024-01-01T00:00:00.000Z', updatedAt: '2024-01-01T00:00:00.000Z',
+      locked: false, x: 0.2, y: 0.3, width: 0.1, height: 0.1, thickness: 1,
+    };
+    const state: DocumentState = { annotationsByPage: { 1: [rectAnn] } };
+    const action: Action = { type: 'MOVE_ANNOTATION', page: 1, id: 'r1', dx: 0.05, dy: -0.1 };
+    const after = annotationReducer(state, action);
+    const inverse = computeInverse(state, action);
+    const restored = annotationReducer(after, inverse);
+    const r = restored.annotationsByPage[1]![0];
+    expect(r.type).toBe('rectangle');
+    if (r.type === 'rectangle') {
+      expect(r.x).toBeCloseTo(0.2);
+      expect(r.y).toBeCloseTo(0.3);
+    }
+  });
+
+  it('UPDATE → inverse → restores original state', () => {
+    const state: DocumentState = { annotationsByPage: { 1: [ann1] } };
+    const action: Action = { type: 'UPDATE_ANNOTATION', page: 1, id: 'a1', patch: { color: '#ff0000' } };
+    const after = annotationReducer(state, action);
+    const inverse = computeInverse(state, action);
+    const restored = annotationReducer(after, inverse);
+    expect(restored.annotationsByPage[1]![0].color).toBe('#000');
+  });
+
+  it('CLEAR_PAGE → inverse → restores removed annotations', () => {
+    const state: DocumentState = { annotationsByPage: { 1: [ann1, ann2, ann3] } };
+    const action: Action = { type: 'CLEAR_PAGE', page: 1 };
+    const after = annotationReducer(state, action);
+    const inverse = computeInverse(state, action);
+    const restored = annotationReducer(after, inverse);
+    // Locked annotation (ann3) was never removed, unlocked ones restored
+    expect(restored.annotationsByPage[1]).toHaveLength(3);
+  });
+
+  it('LOCK → inverse → restores original state', () => {
+    const state: DocumentState = { annotationsByPage: { 1: [ann1] } };
+    const action: Action = { type: 'LOCK_ANNOTATION', page: 1, id: 'a1', locked: true };
+    const after = annotationReducer(state, action);
+    const inverse = computeInverse(state, action);
+    const restored = annotationReducer(after, inverse);
+    expect(restored.annotationsByPage[1]![0].locked).toBe(false);
+  });
+
+  it('LOAD_PAGE → inverse → restores original page', () => {
+    const state: DocumentState = { annotationsByPage: { 1: [ann1] } };
+    const action: Action = { type: 'LOAD_PAGE', page: 1, annotations: [ann2, ann3] };
+    const after = annotationReducer(state, action);
+    const inverse = computeInverse(state, action);
+    const restored = annotationReducer(after, inverse);
+    expect(restored).toEqual(state);
+  });
+
+  it('BATCH → inverse → restores original state', () => {
+    const state = emptyState();
+    const action: Action = {
+      type: 'BATCH',
+      actions: [
+        { type: 'ADD_ANNOTATION', page: 1, annotation: ann1 },
+        { type: 'ADD_ANNOTATION', page: 1, annotation: ann2 },
+      ],
+    };
+    const after = annotationReducer(state, action);
+    const inverse = computeInverse(state, action);
+    const restored = annotationReducer(after, inverse);
+    expect(restored.annotationsByPage[1] ?? []).toEqual([]);
+  });
 });
