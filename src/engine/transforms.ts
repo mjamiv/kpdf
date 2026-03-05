@@ -9,18 +9,26 @@ export function moveAnnotation(ann: Annotation, dx: number, dy: number): Annotat
   switch (ann.type) {
     case 'pen':
     case 'polygon':
+    case 'area':
+    case 'polyline':
       return { ...ann, points: ann.points.map(p => movePoint(p, dx, dy)) };
     case 'rectangle':
     case 'highlight':
     case 'text':
     case 'cloud':
     case 'stamp':
+    case 'ellipse':
       return { ...ann, x: clamp01(ann.x + dx), y: clamp01(ann.y + dy) };
     case 'arrow':
     case 'measurement':
+    case 'dimension':
       return { ...ann, start: movePoint(ann.start, dx, dy), end: movePoint(ann.end, dx, dy) };
     case 'callout':
       return { ...ann, box: { ...ann.box, x: clamp01(ann.box.x + dx), y: clamp01(ann.box.y + dy) }, leaderTarget: movePoint(ann.leaderTarget, dx, dy) };
+    case 'angle':
+      return { ...ann, vertex: movePoint(ann.vertex, dx, dy), ray1: movePoint(ann.ray1, dx, dy), ray2: movePoint(ann.ray2, dx, dy) };
+    case 'count':
+      return { ...ann, x: clamp01(ann.x + dx), y: clamp01(ann.y + dy) };
     default:
       return ann;
   }
@@ -70,12 +78,16 @@ export function resizeAnnotation(ann: Annotation, anchor: AnchorPosition, dx: nu
     case 'highlight':
     case 'cloud':
     case 'stamp':
+    case 'ellipse':
       return { ...ann, ...resizeRect(ann.x, ann.y, ann.width, ann.height, anchor, dx, dy) };
     case 'pen':
     case 'polygon':
+    case 'area':
+    case 'polyline':
       return { ...ann, points: resizePoints(ann.points, anchor, dx, dy) };
     case 'arrow':
-    case 'measurement': {
+    case 'measurement':
+    case 'dimension': {
       if (anchor === 'nw' || anchor === 'w' || anchor === 'sw') {
         return { ...ann, start: movePoint(ann.start, dx, dy) };
       }
@@ -84,7 +96,10 @@ export function resizeAnnotation(ann: Annotation, anchor: AnchorPosition, dx: nu
     case 'callout':
       return { ...ann, box: resizeRect(ann.box.x, ann.box.y, ann.box.width, ann.box.height, anchor, dx, dy) };
     case 'text':
+    case 'count':
       return ann;
+    case 'angle':
+      return { ...ann, vertex: movePoint(ann.vertex, dx, dy), ray1: movePoint(ann.ray1, dx, dy), ray2: movePoint(ann.ray2, dx, dy) };
     default:
       return ann;
   }

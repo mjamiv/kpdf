@@ -67,18 +67,26 @@ function applyDragOffset(ann: Annotation, dx: number, dy: number): Annotation {
   switch (ann.type) {
     case 'pen':
     case 'polygon':
+    case 'area':
+    case 'polyline':
       return { ...ann, points: ann.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) };
     case 'rectangle':
     case 'highlight':
     case 'text':
     case 'cloud':
     case 'stamp':
+    case 'ellipse':
       return { ...ann, x: ann.x + dx, y: ann.y + dy };
     case 'arrow':
     case 'measurement':
+    case 'dimension':
       return { ...ann, start: { x: ann.start.x + dx, y: ann.start.y + dy }, end: { x: ann.end.x + dx, y: ann.end.y + dy } };
     case 'callout':
       return { ...ann, box: { ...ann.box, x: ann.box.x + dx, y: ann.box.y + dy }, leaderTarget: { x: ann.leaderTarget.x + dx, y: ann.leaderTarget.y + dy } };
+    case 'angle':
+      return { ...ann, vertex: { x: ann.vertex.x + dx, y: ann.vertex.y + dy }, ray1: { x: ann.ray1.x + dx, y: ann.ray1.y + dy }, ray2: { x: ann.ray2.x + dx, y: ann.ray2.y + dy } };
+    case 'count':
+      return { ...ann, x: ann.x + dx, y: ann.y + dy };
     default:
       return ann;
   }
@@ -90,21 +98,31 @@ function getBoundingBox(ann: Annotation): { x: number; y: number; w: number; h: 
     case 'highlight':
     case 'cloud':
     case 'stamp':
+    case 'ellipse':
       return { x: ann.x, y: ann.y, w: ann.width, h: ann.height };
     case 'text':
       return { x: ann.x, y: ann.y - 0.02, w: 0.1, h: 0.025 };
     case 'pen':
-    case 'polygon': {
+    case 'polygon':
+    case 'area':
+    case 'polyline': {
       const bb = pointsBoundingBox(ann.points);
       return { x: bb.minX, y: bb.minY, w: bb.maxX - bb.minX, h: bb.maxY - bb.minY };
     }
     case 'arrow':
-    case 'measurement': {
+    case 'measurement':
+    case 'dimension': {
       const bb = pointsBoundingBox([ann.start, ann.end]);
       return { x: bb.minX, y: bb.minY, w: bb.maxX - bb.minX, h: bb.maxY - bb.minY };
     }
     case 'callout':
       return { x: ann.box.x, y: ann.box.y, w: ann.box.width, h: ann.box.height };
+    case 'angle': {
+      const bb = pointsBoundingBox([ann.vertex, ann.ray1, ann.ray2]);
+      return { x: bb.minX, y: bb.minY, w: bb.maxX - bb.minX, h: bb.maxY - bb.minY };
+    }
+    case 'count':
+      return { x: ann.x - ann.radius, y: ann.y - ann.radius, w: ann.radius * 2, h: ann.radius * 2 };
     default:
       return null;
   }
