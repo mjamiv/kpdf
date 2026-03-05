@@ -1,7 +1,9 @@
 import { useCallback, useState } from 'react';
 
 export type LeftTab = 'sheets' | 'pages';
-export type RightTab = 'comments' | 'markups' | 'punchList' | 'properties' | 'ai';
+export type RightTab = 'activity' | 'markups' | 'ai';
+
+export type Overlay = 'shortcuts' | 'scaleCalibration' | 'stampPicker' | 'toolPresets' | 'storageBrowser' | 'compare' | null;
 
 export type PanelState = {
   leftOpen: boolean;
@@ -9,26 +11,16 @@ export type PanelState = {
   rightOpen: boolean;
   rightTab: RightTab;
   commandPaletteOpen: boolean;
-  storageBrowserOpen: boolean;
-  compareMode: boolean;
-  showShortcuts: boolean;
-  showScaleCalibration: boolean;
-  showStampPicker: boolean;
-  showToolPresets: boolean;
+  overlay: Overlay;
 };
 
 const initialState: PanelState = {
   leftOpen: false,
   leftTab: 'sheets',
   rightOpen: false,
-  rightTab: 'comments',
+  rightTab: 'activity',
   commandPaletteOpen: false,
-  storageBrowserOpen: false,
-  compareMode: false,
-  showShortcuts: false,
-  showScaleCalibration: false,
-  showStampPicker: false,
-  showToolPresets: false,
+  overlay: null,
 };
 
 export function usePanelState() {
@@ -38,36 +30,50 @@ export function usePanelState() {
   const setLeftTab = useCallback((tab: LeftTab) => setState((s) => ({ ...s, leftTab: tab, leftOpen: true })), []);
 
   const toggleRight = useCallback(() => setState((s) => ({ ...s, rightOpen: !s.rightOpen })), []);
+  const openRight = useCallback((tab: RightTab) => setState((s) => ({ ...s, rightTab: tab, rightOpen: true })), []);
   const setRightTab = useCallback((tab: RightTab) => setState((s) => ({ ...s, rightTab: tab, rightOpen: true })), []);
 
   const toggleCommandPalette = useCallback(() => setState((s) => ({ ...s, commandPaletteOpen: !s.commandPaletteOpen })), []);
   const closeCommandPalette = useCallback(() => setState((s) => ({ ...s, commandPaletteOpen: false })), []);
 
-  const toggleStorageBrowser = useCallback(() => setState((s) => ({ ...s, storageBrowserOpen: !s.storageBrowserOpen })), []);
-  const closeStorageBrowser = useCallback(() => setState((s) => ({ ...s, storageBrowserOpen: false })), []);
+  const setOverlay = useCallback((overlay: Overlay) => setState((s) => ({ ...s, overlay })), []);
+  const closeOverlay = useCallback(() => setState((s) => ({ ...s, overlay: null })), []);
+  const toggleOverlay = useCallback((overlay: Overlay) => setState((s) => ({ ...s, overlay: s.overlay === overlay ? null : overlay })), []);
 
-  const toggleCompareMode = useCallback(() => setState((s) => ({ ...s, compareMode: !s.compareMode })), []);
-
-  const toggleShortcuts = useCallback(() => setState((s) => ({ ...s, showShortcuts: !s.showShortcuts })), []);
-  const closeShortcuts = useCallback(() => setState((s) => ({ ...s, showShortcuts: false })), []);
-
-  const toggleScaleCalibration = useCallback(() => setState((s) => ({ ...s, showScaleCalibration: !s.showScaleCalibration })), []);
-  const closeScaleCalibration = useCallback(() => setState((s) => ({ ...s, showScaleCalibration: false })), []);
-
-  const toggleStampPicker = useCallback(() => setState((s) => ({ ...s, showStampPicker: !s.showStampPicker })), []);
-  const closeStampPicker = useCallback(() => setState((s) => ({ ...s, showStampPicker: false })), []);
-
-  const toggleToolPresets = useCallback(() => setState((s) => ({ ...s, showToolPresets: !s.showToolPresets })), []);
-  const closeToolPresets = useCallback(() => setState((s) => ({ ...s, showToolPresets: false })), []);
+  // Backward-compatible convenience methods
+  const toggleShortcuts = useCallback(() => toggleOverlay('shortcuts'), [toggleOverlay]);
+  const closeShortcuts = useCallback(() => closeOverlay(), [closeOverlay]);
+  const toggleScaleCalibration = useCallback(() => toggleOverlay('scaleCalibration'), [toggleOverlay]);
+  const closeScaleCalibration = useCallback(() => closeOverlay(), [closeOverlay]);
+  const toggleStampPicker = useCallback(() => toggleOverlay('stampPicker'), [toggleOverlay]);
+  const closeStampPicker = useCallback(() => closeOverlay(), [closeOverlay]);
+  const toggleToolPresets = useCallback(() => toggleOverlay('toolPresets'), [toggleOverlay]);
+  const closeToolPresets = useCallback(() => closeOverlay(), [closeOverlay]);
+  const toggleStorageBrowser = useCallback(() => toggleOverlay('storageBrowser'), [toggleOverlay]);
+  const closeStorageBrowser = useCallback(() => closeOverlay(), [closeOverlay]);
+  const toggleCompareMode = useCallback(() => toggleOverlay('compare'), [toggleOverlay]);
 
   return {
-    panels: state,
+    panels: {
+      ...state,
+      // Backward-compat computed booleans
+      showShortcuts: state.overlay === 'shortcuts',
+      showScaleCalibration: state.overlay === 'scaleCalibration',
+      showStampPicker: state.overlay === 'stampPicker',
+      showToolPresets: state.overlay === 'toolPresets',
+      storageBrowserOpen: state.overlay === 'storageBrowser',
+      compareMode: state.overlay === 'compare',
+    },
     toggleLeft,
     setLeftTab,
     toggleRight,
+    openRight,
     setRightTab,
     toggleCommandPalette,
     closeCommandPalette,
+    setOverlay,
+    closeOverlay,
+    toggleOverlay,
     toggleStorageBrowser,
     closeStorageBrowser,
     toggleCompareMode,

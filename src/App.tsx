@@ -41,7 +41,8 @@ import SelectionHandles from './components/SelectionHandles';
 import ShortcutHelpPanel from './components/ShortcutHelpPanel';
 import StatusBar from './components/StatusBar';
 import TabBar from './components/TabBar';
-import Toolbar from './components/Toolbar';
+import TopBar from './components/TopBar';
+import ToolRail from './components/ToolRail';
 import PanelLayout from './components/PanelLayout';
 import LeftSidebar from './components/LeftSidebar';
 import RightPanel from './components/RightPanel';
@@ -51,6 +52,8 @@ import ScaleCalibrationPanel from './components/ScaleCalibrationPanel';
 import { CommandPalette } from './components/CommandPalette';
 import StorageBrowser from './components/StorageBrowser';
 import PresenceIndicator from './components/PresenceIndicator';
+import ContextMenu from './components/ContextMenu';
+import { buildCanvasMenuItems, type ContextMenuItem } from './components/contextMenuItems';
 import type { DocumentTab } from './workflow/documentStore';
 import { createDocumentTab } from './workflow/documentStore';
 import { createReviewState, isToolAllowed, type ReviewState } from './workflow/reviewMode';
@@ -122,6 +125,8 @@ export default function App() {
   const [draft, setDraftState] = useState<unknown>(null);
   const [selection, setSelection] = useState<SelectionState>(createSelectionState);
   const [isBusy, setIsBusy] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: ContextMenuItem[] } | null>(null);
   const [status, setStatus] = useState('Drop a PDF or click Open PDF.');
   const [canvasRect, setCanvasRect] = useState<DOMRect | null>(null);
   const [reviewState, setReviewState] = useState<ReviewState>(createReviewState);
@@ -678,10 +683,18 @@ export default function App() {
 
   const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
+    setIsDragOver(false);
     const file = event.dataTransfer.files?.[0];
     if (!file || file.type !== 'application/pdf') { setStatus('Drop a valid PDF file.'); return; }
     try { await loadPdf(new Uint8Array(await file.arrayBuffer()), file.name); }
     catch (e) { setStatus(`Drop error: ${(e as Error).message}`); setIsBusy(false); }
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => { e.preventDefault(); setIsDragOver(true); };
+  const handleDragLeave = (e: React.DragEvent) => {
+    // Only leave when exiting the app container
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setIsDragOver(false);
   };
 
   const savePdf = async () => {
@@ -856,6 +869,21 @@ export default function App() {
     }
   }, [annotationsByPage, dispatch]);
 
+  const handleCanvasContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const selIds = Array.from(selection.ids);
+    const annotation = selIds.length === 1 ? currentAnnotations.find((a) => a.id === selIds[0]) ?? null : null;
+    const items = buildCanvasMenuItems(annotation, {
+      tool,
+      onDelete: selIds.length > 0 ? () => {
+        const toDelete = selIds.map((id) => ({ page: pageNumber, id }));
+        handleDeleteAnnotations(toDelete);
+      } : undefined,
+      onDeselect: selIds.length > 0 ? () => setSelection(deselectAll()) : undefined,
+    });
+    if (items.length > 0) setContextMenu({ x: e.clientX, y: e.clientY, items });
+  }, [selection, currentAnnotations, tool, pageNumber, handleDeleteAnnotations]);
+
   // AI callbacks
   const handleApplyLabels = useCallback((labels: SmartLabel[]) => {
     for (const label of labels) {
@@ -910,20 +938,31 @@ export default function App() {
     setCurrentPage: (p) => handlePageNav(p),
     togglePanels: {
       shortcuts: panelState.toggleShortcuts,
-      comments: () => panelState.setRightTab('comments'),
+      comments: () => panelState.setRightTab('activity'),
       markups: () => panelState.setRightTab('markups'),
-      punchList: () => panelState.setRightTab('punchList'),
+      punchList: () => panelState.setRightTab('activity'),
       ai: () => panelState.setRightTab('ai'),
       sheets: panelState.toggleLeft,
     },
     exportPdf: pdfDoc ? savePdf : undefined,
     exportAnnotations: pdfDoc ? handleExportXfdf : undefined,
+    clearPage: pdfDoc ? clearPage : undefined,
+    toggleReview: toggleReviewMode,
+    toggleFlatten: () => setFlattenOnSave((v) => !v),
+    importSidecar: () => sidecarInputRef.current?.click(),
+    importXfdf: () => xfdfInputRef.current?.click(),
+    exportXfdf: pdfDoc ? handleExportXfdf : undefined,
+    toggleScaleCalibration: panelState.toggleScaleCalibration,
+    toggleToolPresets: panelState.toggleToolPresets,
   });
+
+  // Keep nav history handlers referenced to suppress unused warnings
+  void handleNavBack; void handleNavForward; void handleNavJump;
 
   const overlayCursor = isPanDragging ? 'grabbing' : (panMode || spacePanActive ? 'grab' : (getTool(tool)?.cursor ?? 'crosshair'));
 
   return (
-    <div className="app" onDrop={handleDrop} onDragOver={(e) => e.preventDefault()}>
+    <div className={`app${isDragOver ? ' drag-over' : ''}`} onDrop={handleDrop} onDragOver={(e) => e.preventDefault()} onDragEnter={handleDragEnter} onDragLeave={handleDragLeave}>
       {/* Hidden file inputs */}
       <input ref={fileInputRef} type="file" accept="application/pdf" onChange={handleFileChange} hidden />
       <input ref={sidecarInputRef} type="file" accept="application/json,.json,.kpdf.json" onChange={handleSidecarFileChange} hidden />
@@ -932,38 +971,24 @@ export default function App() {
       {/* Skip nav */}
       <a href="#main-canvas" className="skip-nav">Skip to content</a>
 
-      {/* Toolbar */}
-      <Toolbar
-        tool={tool} lockedTool={lockedTool} color={color} author={author}
-        flattenOnSave={flattenOnSave} reviewState={reviewState} panMode={panMode}
-        pdfLoaded={!!pdfDoc} isBusy={isBusy} pageNumber={pageNumber} pageCount={pageCount}
-        pageInput={pageInput} zoom={zoom} fitMode={fitMode}
-        navHistory={navHistory.history} navCurrentIndex={navHistory.currentIndex}
+      {/* Loading bar */}
+      {isBusy && <div className="busy-bar" />}
+
+      {/* Top bar */}
+      <TopBar
+        pdfLoaded={!!pdfDoc} isBusy={isBusy}
+        zoom={zoom} fitMode={fitMode}
+        pageNumber={pageNumber} pageCount={pageCount} pageInput={pageInput}
         onOpenFile={() => fileInputRef.current?.click()}
-        onImportSidecar={() => sidecarInputRef.current?.click()}
-        onExportXfdf={handleExportXfdf}
-        onImportXfdf={() => xfdfInputRef.current?.click()}
         onSave={savePdf}
-        onSetFlatten={setFlattenOnSave}
-        onToolClick={handleToolClick} onToolDoubleClick={handleToolDoubleClick}
-        onSetColor={setColor} onSetAuthor={setAuthor}
-        onUndo={handleUndo} onRedo={handleRedo} onClearPage={clearPage}
-        onTogglePan={togglePanMode} onToggleReview={toggleReviewMode}
-        onZoomIn={zoomIn} onZoomOut={zoomOut} onResetZoom={resetZoom}
+        onUndo={handleUndo} onRedo={handleRedo}
+        onZoomIn={zoomIn} onZoomOut={zoomOut}
         onFitWidth={fitToWidth} onFitPage={fitToPage}
-        onCenter={() => setPanPosition({ x: 0, y: 0 })}
-        onZoomPreset={(z) => applyZoom(z)}
         onPageInputChange={setPageInput} onCommitPageInput={commitPageInput}
-        onFirstPage={() => handlePageNav(1)}
         onPrevPage={() => handlePageNav(Math.max(1, pageNumber - 1))}
         onNextPage={() => handlePageNav(Math.min(pageCount, pageNumber + 1))}
-        onLastPage={() => handlePageNav(pageCount)}
-        onNavBack={handleNavBack} onNavForward={handleNavForward} onNavJump={handleNavJump}
-        onToggleLeft={panelState.toggleLeft} onToggleRight={panelState.toggleRight}
-        onToggleShortcuts={panelState.toggleShortcuts}
         onToggleCommandPalette={panelState.toggleCommandPalette}
-        onToggleScaleCalibration={panelState.toggleScaleCalibration}
-        onToggleToolPresets={panelState.toggleToolPresets}
+        onToggleLeft={panelState.toggleLeft} onToggleRight={panelState.toggleRight}
         leftOpen={panels.leftOpen} rightOpen={panels.rightOpen}
       />
 
@@ -975,13 +1000,21 @@ export default function App() {
         <PresenceIndicator presence={presence} currentUserId={author} />
       )}
 
-      {/* 3-column layout */}
+      {/* 4-column layout: rail + sidebar + canvas + panel */}
       <PanelLayout
+        toolRail={
+          <ToolRail
+            tool={tool} lockedTool={lockedTool}
+            reviewState={reviewState} pdfLoaded={!!pdfDoc}
+            panMode={panMode} color={color}
+            onToolClick={handleToolClick} onToolDoubleClick={handleToolDoubleClick}
+            onTogglePan={togglePanMode} onSetColor={setColor}
+            onToggleShortcuts={panelState.toggleShortcuts}
+          />
+        }
         leftSidebar={
           <LeftSidebar
             open={panels.leftOpen}
-            tab={panels.leftTab}
-            onSetTab={panelState.setLeftTab}
             sheetPages={sheetPages}
             currentPage={pageNumber}
             pageCount={pageCount}
@@ -1024,10 +1057,26 @@ export default function App() {
           onPointerMove={handleShellPointerMove}
           onPointerUp={handleShellPointerUp}
           onPointerLeave={handleShellPointerUp}
+          onContextMenu={handleCanvasContextMenu}
           role="main"
         >
           {!pdfDoc ? (
-            <div className="empty-state"><h1>KPDF Markup</h1><p>Open or drop a PDF to start marking up.</p></div>
+            <div className={`empty-state${isDragOver ? ' drag-active' : ''}`}>
+              <div className="empty-state-icon">
+                <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="8" y="4" width="32" height="40" rx="3" />
+                  <polyline points="24,4 24,16 36,16" />
+                  <line x1="16" y1="24" x2="32" y2="24" />
+                  <line x1="16" y1="30" x2="28" y2="30" />
+                  <line x1="16" y1="36" x2="24" y2="36" />
+                </svg>
+              </div>
+              <h1>KPDF Markup</h1>
+              <p>Drop a PDF here or click <strong>Open</strong> to begin.</p>
+              <div className="empty-state-shortcuts">
+                <kbd>Cmd+O</kbd> Open &nbsp; <kbd>Cmd+K</kbd> Commands
+              </div>
+            </div>
           ) : (
             <div className="page-wrap" style={{ transform: `translate(${panX}px, ${panY}px)` }}>
               <canvas ref={pdfCanvasRef} className="pdf-canvas" />
@@ -1042,7 +1091,7 @@ export default function App() {
       </PanelLayout>
 
       {/* Status bar */}
-      <StatusBar status={status} />
+      <StatusBar status={status} tool={tool} lockedTool={lockedTool} />
 
       {/* Modal overlays */}
       <ShortcutHelpPanel visible={panels.showShortcuts} onClose={panelState.closeShortcuts} />
@@ -1055,6 +1104,21 @@ export default function App() {
       {/* Popovers */}
       <StampPicker visible={panels.showStampPicker} activeStampId={activeStampId} onSelectStamp={(s) => { setActiveStampId(s.id); activateTool('stamp'); }} onClose={panelState.closeStampPicker} />
       <ToolPresets visible={panels.showToolPresets} currentColor={color} currentTool={tool} onApplyPreset={handleApplyPreset} onClose={panelState.closeToolPresets} />
+
+      {/* Context menu */}
+      {contextMenu && <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenu.items} onClose={() => setContextMenu(null)} />}
+
+      {/* Drag overlay */}
+      {isDragOver && (
+        <div className="drag-overlay">
+          <div className="drag-overlay-content">
+            <svg width="40" height="40" viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+              <path d="M20 8v24M8 20h24" />
+            </svg>
+            <span>Drop PDF to open</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

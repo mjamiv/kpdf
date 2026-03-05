@@ -5,49 +5,49 @@ kpdf is a React + Vite + TypeScript PDF markup tool using `pdfjs-dist` for rende
 
 ## Completed Work
 
-### Core platform (Phases 1-4)
-- PDF viewer with pen/rect/highlight/text baseline tools
-- Engine refactor: reducer state, inverse-action undo/redo, hit-testing, transform ops
-- Extended toolset: select, arrow, callout, cloud, measurement, polygon, stamp
+### Core platform (Phases 1-5)
+- PDF viewer with 18 annotation tools (pen, rect, highlight, text, arrow, callout, cloud, measurement, polygon, stamp, ellipse, area, angle, count, dimension, polyline, hyperlink)
+- Engine: reducer state, inverse-action undo/redo, hit-testing, transform ops
 - 3-tier persistence: embedded attachment, sidecar JSON, localStorage
-- Export: editable PDF / flattened PDF + sidecar + CSV report
-- Document workflow: tabs, dirty tracking, comments panel, review mode
-- E2E infra with Playwright (empty-state + PDF-load checks)
+- Export: editable PDF / flattened PDF / XFDF / CSV
+- Document workflow: tabs, threading, punch lists, review mode
+- Collaboration: CRDT-ready sync model, presence, plugin API, cloud storage abstraction, AI assist
 
-### Latest session (viewer and interaction overhaul)
-- Toolbar and control UX redesigned in `src/App.tsx` + `src/App.css`
-- Tool behavior model implemented:
-  - auto-return to **Select** after creating an annotation
-  - double-click tool to lock
-  - click locked tool to unlock
-- Viewer controls added/upgraded:
-  - Ctrl/Cmd `+`, `-`, `0`
-  - Ctrl/Cmd + wheel anchor zoom
-  - zoom presets
-  - Fit Width and Fit Page modes (per-tab fit state)
-  - page jump input + First/Prev/Next/Last + Home/End/PageUp/PageDown
-- Pan behavior upgraded:
-  - pan mode toggle (`H`) + temporary pan (`Space` hold)
-  - unconstrained free page drag using per-tab pan offsets
-  - Center reset action
-- New viewer control utility module + tests:
-  - `src/viewer/controls.ts`
-  - `src/viewer/controls.test.ts`
+### Minimalist UX Overhaul (Phase 1)
+- Replaced monolithic Toolbar.tsx with slim TopBar.tsx (40px) + vertical ToolRail.tsx (46px)
+- 4-column layout: rail + sidebar + canvas + panel (was 3-column)
+- Right panel consolidated from 5 tabs to 3: Activity (comments + punch list), Markups, AI
+- Left sidebar: unified "Document" view with collapsible Sheets/Pages sections (replaced tab-based)
+- usePanelState: single `overlay` field replaces 5 boolean toggles
+- useCommandRegistry: 8 commands migrated from toolbar to Command Palette
+- StatusBar: shows active tool + "Cmd+K" hint
+- Removed decorative CSS noise (gradient lines, glow box-shadows)
+
+### Canvas & Interaction Polish (Phase 2)
+- Canvas empty state: dashed-border drop zone with PDF icon + keyboard shortcut hints
+- Drag overlay: full-screen frosted glass "Drop PDF to open" on drag-over
+- Busy bar: animated 2px amber progress bar at viewport top during isBusy
+- Context menu: right-click on canvas for Delete/Deselect/SelectAll (ContextMenu.tsx + contextMenuItems.ts)
+- Tooltip component: delayed hover tooltips with shortcut kbd badges, 4 positions (Tooltip.tsx)
+- Sidebar/panel transitions smoothed (220ms, will-change hints)
+- Responsive breakpoints updated for TopBar/ToolRail layout
+- Old Toolbar.tsx deleted
 
 ## Key Decisions and Tradeoffs
-- Kept annotation commit logic in `dispatch` so tool auto-fallback to Select happens centrally.
-- Persisted `fitMode` and `panX/panY` on `DocumentTab` to keep per-tab viewer context stable.
-- Switched from scroll-bound pan to transform-based free pan for full operator control.
-- Added `Center` reset to counter the downside of unconstrained pan (possible off-screen drift).
+- Kept annotation commit logic in `dispatch` so tool auto-fallback to Select happens centrally
+- Persisted `fitMode` and `panX/panY` on DocumentTab for per-tab viewer context
+- Transform-based free pan for full operator control
+- Single `overlay` field in usePanelState ensures only one modal/popover open at a time
 
 ## Current State
-- Dev server: runs locally via `npm run dev`
+- Dev server: `npm run dev`
 - Lint: passing
-- Unit tests: **102 passing** (`npx vitest run src`)
+- Unit tests: **585 passing** (`npm test`)
 - Build: passing (`npm run build`)
-- Working tree includes large App/UI changes plus doc updates.
+- All changes on `main` branch, ready to commit
 
 ## Next Best Steps
-1. Wire true drag-resize/rotate behavior from selection handles into reducer actions.
-2. Add deeper E2E scenarios: annotation create/edit, tool lock behavior, fit/pan flows, save/reload loop.
-3. Optional performance pass: split heavy bundle paths and profile first render/interaction FPS.
+1. Wire true drag-resize/rotate behavior from selection handles into reducer actions
+2. Add Tooltip wrapper to TopBar and ToolRail buttons (replacing raw `title` attrs)
+3. Add deeper E2E scenarios: annotation create/edit, tool lock, fit/pan flows, save/reload
+4. Optional performance pass: split heavy bundle paths and profile first render/interaction FPS

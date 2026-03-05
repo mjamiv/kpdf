@@ -47,6 +47,15 @@ export type CommandRegistryOptions = {
   togglePanels?: Record<string, () => void>;
   exportAnnotations?: () => void;
   exportPdf?: () => void;
+  // Extended commands (moved from toolbar to command palette)
+  clearPage?: () => void;
+  toggleReview?: () => void;
+  toggleFlatten?: () => void;
+  importSidecar?: () => void;
+  importXfdf?: () => void;
+  exportXfdf?: () => void;
+  toggleScaleCalibration?: () => void;
+  toggleToolPresets?: () => void;
 };
 
 export function useCommandRegistry(options: CommandRegistryOptions): CommandItem[] {
@@ -185,6 +194,32 @@ export function useCommandRegistry(options: CommandRegistryOptions): CommandItem
       }
     }
 
+    // Extended commands (moved from toolbar)
+    if (options.clearPage) {
+      commands.push({ id: 'action-clear-page', label: 'Clear Page Annotations', description: 'Remove all annotations on current page', category: 'action', action: options.clearPage });
+    }
+    if (options.toggleReview) {
+      commands.push({ id: 'action-toggle-review', label: 'Toggle Review Mode', description: 'Enable/disable review mode', category: 'action', action: options.toggleReview });
+    }
+    if (options.toggleFlatten) {
+      commands.push({ id: 'action-toggle-flatten', label: 'Toggle Flatten on Save', description: 'Flatten annotations when saving', category: 'action', action: options.toggleFlatten });
+    }
+    if (options.importSidecar) {
+      commands.push({ id: 'import-sidecar', label: 'Import Sidecar JSON', description: 'Load annotations from sidecar file', category: 'export', action: options.importSidecar });
+    }
+    if (options.importXfdf) {
+      commands.push({ id: 'import-xfdf', label: 'Import XFDF', description: 'Import XFDF annotations', category: 'export', action: options.importXfdf });
+    }
+    if (options.exportXfdf) {
+      commands.push({ id: 'export-xfdf', label: 'Export XFDF', description: 'Export annotations as XFDF', category: 'export', action: options.exportXfdf });
+    }
+    if (options.toggleScaleCalibration) {
+      commands.push({ id: 'action-scale-calibration', label: 'Scale Calibration', description: 'Set measurement scale', category: 'action', action: options.toggleScaleCalibration });
+    }
+    if (options.toggleToolPresets) {
+      commands.push({ id: 'action-tool-presets', label: 'Tool Presets', description: 'Load discipline presets', category: 'action', action: options.toggleToolPresets });
+    }
+
     // Export commands
     if (exportAnnotations) {
       commands.push({
@@ -207,21 +242,8 @@ export function useCommandRegistry(options: CommandRegistryOptions): CommandItem
     }
 
     return commands;
-  }, [
-    setTool,
-    undo,
-    redo,
-    canUndo,
-    canRedo,
-    zoom,
-    setZoom,
-    currentPage,
-    pageCount,
-    setCurrentPage,
-    togglePanels,
-    exportAnnotations,
-    exportPdf,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [options]);
 }
 
 /**

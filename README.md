@@ -12,15 +12,20 @@ Access app live at: https://mjamiv.github.io/kpdf/
 - **AEC**: Measurement, Area, Angle, Count, Dimension
 - **Other**: Stamp (with custom stamp library), Hyperlink (cross-page links)
 
-### Professional UI — "Forge" Dark Theme
+### Minimalist UI — "Forge" Dark Theme
+- **Layout**: Slim TopBar (40px) + vertical ToolRail (46px) + maximized canvas
 - **Dark industrial aesthetic**: 5-layer dark surface hierarchy with warm amber (#e8a023) accent
 - **Typography**: Outfit (UI) + JetBrains Mono (numeric readouts)
-- **Toolbar**: Frosted glass toolbar with category-colored glow effects per tool group (cyan/indigo/green/purple)
-- **Left sidebar**: Sheet Index (auto-detected AEC sheet IDs) and page navigation
-- **Right panel**: Tabbed interface with Comments, Markups List, Punch List, Properties, and AI Assist
-- **Canvas**: Subtle dot-grid background with dramatic page shadow depth
-- **Command palette**: Fuzzy-search commands via Cmd+K / Ctrl+K
-- **Responsive**: Icon-only toolbar at 980px, overlay sidebars at 768px
+- **Tool rail**: Vertical sidebar with collapsible tool groups, category-colored active states (cyan/indigo/green/purple)
+- **Left sidebar**: Unified "Document" view with collapsible Sheets and Pages sections
+- **Right panel**: 3-tab interface — Activity (comments + punch list), Markups, AI Assist
+- **Canvas**: Drop zone empty state with keyboard shortcut hints, drag overlay for PDF drop
+- **Context menu**: Right-click on canvas for quick annotation actions (delete, deselect)
+- **Tooltips**: Delayed hover tooltips with keyboard shortcut badges
+- **Loading indicator**: Animated progress bar during PDF operations
+- **Command palette**: Fuzzy-search commands via Cmd+K / Ctrl+K (includes migrated toolbar actions)
+- **Status bar**: Shows active tool, locked state, and Cmd+K hint
+- **Responsive**: Compact tool rail at 980px, overlay sidebars at 768px
 
 ### Viewer Controls
 - Keyboard zoom: **Ctrl/Cmd +**, **Ctrl/Cmd -**, **Ctrl/Cmd 0**
@@ -102,8 +107,8 @@ npm run build       # TypeScript + Vite production build
 ## Project Structure
 ```
 src/
-  App.tsx                    # Main app shell (~550 lines)
-  App.css                    # "Forge" dark theme (layout, panels, toolbar, components)
+  App.tsx                    # Main app shell
+  App.css                    # "Forge" dark theme (layout, panels, components)
   types.ts                   # Annotation types, tool union, shared types
   annotationPersistence.ts   # Load/save/sidecar/localStorage
   pdfExport.ts               # PDF export with flatten + attachment embedding
@@ -120,18 +125,22 @@ src/
     utils.ts                 # Shared utilities
   tools/                     # 18 tool implementations via ToolBehavior interface
   hooks/
-    usePanelState.ts         # Panel visibility management
+    usePanelState.ts         # Panel visibility (overlay state pattern)
     useNavigationHistory.ts  # Page back/forward history
     useManagerInit.ts        # Plugin/storage/AI manager init
-    useCommandRegistry.ts    # Command palette commands
+    useCommandRegistry.ts    # Command palette commands (incl. migrated toolbar actions)
     useVirtualScroll.ts      # Virtual scrolling for large docs
     useMemoizedAnnotations.ts
   components/
-    Toolbar.tsx              # Icon-based grouped toolbar
+    TopBar.tsx               # Slim 40px header (file, undo, zoom, page nav, panel toggles)
+    ToolRail.tsx             # Vertical 46px tool sidebar (collapsible groups)
+    ContextMenu.tsx          # Right-click context menu
+    contextMenuItems.ts      # Context menu item builder
+    Tooltip.tsx              # Hover tooltip with shortcut badges
     ToolIcon.tsx             # SVG icons for 18 tools
-    PanelLayout.tsx          # 3-column grid shell
-    LeftSidebar.tsx          # Sheets/Pages sidebar
-    RightPanel.tsx           # 5-tab detail panel
+    PanelLayout.tsx          # 4-column grid shell (rail + sidebar + canvas + panel)
+    LeftSidebar.tsx          # Collapsible Sheets/Pages sidebar
+    RightPanel.tsx           # 3-tab panel (Activity/Markups/AI)
     CommandPalette.tsx       # Fuzzy-search command palette
     (+ 15 more: TabBar, StatusBar, SelectionHandles, ShortcutHelpPanel,
      CommentsPanel, MarkupsList, StampPicker, ToolPresets,
