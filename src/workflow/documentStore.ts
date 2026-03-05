@@ -7,6 +7,9 @@ export type DocumentTab = {
   pageNumber: number;
   pageCount: number;
   zoom: number;
+  fitMode: 'manual' | 'width' | 'page';
+  panX: number;
+  panY: number;
   annotationsByPage: AnnotationsByPage;
   dirty: boolean;
   pageScales: Record<number, PageScale>;
@@ -25,6 +28,9 @@ export function createDocumentTab(
     pageNumber: 1,
     pageCount,
     zoom: 1,
+    fitMode: 'manual',
+    panX: 0,
+    panY: 0,
     annotationsByPage: {},
     dirty: false,
     pageScales: {},

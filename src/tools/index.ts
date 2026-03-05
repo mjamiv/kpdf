@@ -14,5 +14,6 @@ import './countTool';
 import './dimensionTool';
 import './ellipseTool';
 import './polylineTool';
+import './hyperlinkTool';
 
 export { getTool, getAllTools, type ToolBehavior, type ToolContext, type NormalizedPointerEvent } from './registry';

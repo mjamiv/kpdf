@@ -18,6 +18,7 @@ export function moveAnnotation(ann: Annotation, dx: number, dy: number): Annotat
     case 'cloud':
     case 'stamp':
     case 'ellipse':
+    case 'hyperlink':
       return { ...ann, x: clamp01(ann.x + dx), y: clamp01(ann.y + dy) };
     case 'arrow':
     case 'measurement':
@@ -79,6 +80,7 @@ export function resizeAnnotation(ann: Annotation, anchor: AnchorPosition, dx: nu
     case 'cloud':
     case 'stamp':
     case 'ellipse':
+    case 'hyperlink':
       return { ...ann, ...resizeRect(ann.x, ann.y, ann.width, ann.height, anchor, dx, dy) };
     case 'pen':
     case 'polygon':

@@ -48,6 +48,7 @@ export function boundingBox(annotation: Annotation): { x: number; y: number; wid
     case 'cloud':
     case 'stamp':
     case 'ellipse':
+    case 'hyperlink':
       return { x: annotation.x, y: annotation.y, width: annotation.width, height: annotation.height };
     case 'text': {
       const h = annotation.fontSize * 1.2;
@@ -119,6 +120,7 @@ export function pointInAnnotation(point: Point, annotation: Annotation, toleranc
     case 'highlight':
     case 'cloud':
     case 'stamp':
+    case 'hyperlink':
       return pointInRect(point, annotation.x, annotation.y, annotation.width, annotation.height, tolerance);
     case 'ellipse': {
       const cx = annotation.x + annotation.width / 2;

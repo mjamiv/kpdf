@@ -1,4 +1,4 @@
-export type Tool = 'pen' | 'rectangle' | 'highlight' | 'text' | 'select' | 'arrow' | 'callout' | 'cloud' | 'measurement' | 'polygon' | 'stamp' | 'area' | 'angle' | 'count' | 'dimension' | 'ellipse' | 'polyline';
+export type Tool = 'pen' | 'rectangle' | 'highlight' | 'text' | 'select' | 'arrow' | 'callout' | 'cloud' | 'measurement' | 'polygon' | 'stamp' | 'area' | 'angle' | 'count' | 'dimension' | 'ellipse' | 'polyline' | 'hyperlink';
 
 export type Point = {
   x: number;
@@ -146,6 +146,16 @@ export type PolylineAnnotation = BaseAnnotation & {
   thickness: number;
 };
 
+export type HyperlinkAnnotation = BaseAnnotation & {
+  type: 'hyperlink';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  targetPage: number;
+  label: string;
+};
+
 export type Annotation =
   | PenAnnotation
   | RectAnnotation
@@ -161,7 +171,8 @@ export type Annotation =
   | AngleAnnotation
   | CountAnnotation
   | DimensionAnnotation
-  | PolylineAnnotation;
+  | PolylineAnnotation
+  | HyperlinkAnnotation;
 
 export type AnchorPosition = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 

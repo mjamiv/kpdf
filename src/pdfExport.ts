@@ -409,6 +409,34 @@ async function drawAnnotations(
         break;
       }
 
+      case 'hyperlink': {
+        // Hyperlinks are interactive-only; draw a visible link box when flattening
+        const hlX = clamp01(annotation.x) * width;
+        const hlW = clamp01(annotation.width) * width;
+        const hlH = clamp01(annotation.height) * height;
+        const hlYTop = clamp01(annotation.y) * height;
+        const hlY = height - hlYTop - hlH;
+
+        page.drawRectangle({
+          x: hlX,
+          y: hlY,
+          width: hlW,
+          height: hlH,
+          borderColor: color,
+          borderWidth: 1,
+          opacity: 0,
+        });
+
+        const hlTextSize = Math.max(Math.min(hlW / Math.max(annotation.label.length, 1) * 1.5, hlH * 0.6), 8);
+        page.drawText(annotation.label, {
+          x: hlX + 2,
+          y: hlY + hlH / 2 - hlTextSize / 2,
+          color,
+          size: hlTextSize,
+        });
+        break;
+      }
+
       default:
         break;
     }
