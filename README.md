@@ -12,10 +12,13 @@ Access app live at: https://mjamiv.github.io/kpdf/
 - **AEC**: Measurement, Area, Angle, Count, Dimension
 - **Other**: Stamp (with custom stamp library), Hyperlink (cross-page links)
 
-### Professional UI
-- **Toolbar**: Grouped icon-based tools with category color accents (Basic/Shapes/AEC/Stamp)
+### Professional UI — "Forge" Dark Theme
+- **Dark industrial aesthetic**: 5-layer dark surface hierarchy with warm amber (#e8a023) accent
+- **Typography**: Outfit (UI) + JetBrains Mono (numeric readouts)
+- **Toolbar**: Frosted glass toolbar with category-colored glow effects per tool group (cyan/indigo/green/purple)
 - **Left sidebar**: Sheet Index (auto-detected AEC sheet IDs) and page navigation
 - **Right panel**: Tabbed interface with Comments, Markups List, Punch List, Properties, and AI Assist
+- **Canvas**: Subtle dot-grid background with dramatic page shadow depth
 - **Command palette**: Fuzzy-search commands via Cmd+K / Ctrl+K
 - **Responsive**: Icon-only toolbar at 980px, overlay sidebars at 768px
 
@@ -100,7 +103,7 @@ npm run build       # TypeScript + Vite production build
 ```
 src/
   App.tsx                    # Main app shell (~550 lines)
-  App.css                    # UI styles (layout, panels, toolbar, components)
+  App.css                    # "Forge" dark theme (layout, panels, toolbar, components)
   types.ts                   # Annotation types, tool union, shared types
   annotationPersistence.ts   # Load/save/sidecar/localStorage
   pdfExport.ts               # PDF export with flatten + attachment embedding

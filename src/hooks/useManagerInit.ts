@@ -39,9 +39,9 @@ function initManagers(): Managers {
   pluginManager.register(createWordCountPlugin());
   pluginManager.register(createAnnotationStatsPlugin());
   pluginManager.register(createAutoSavePlugin());
-  pluginManager.activate('word-count');
-  pluginManager.activate('annotation-stats');
-  pluginManager.activate('auto-save');
+  pluginManager.activate('builtin.word-count');
+  pluginManager.activate('builtin.annotation-stats');
+  pluginManager.activate('builtin.auto-save');
 
   return { pluginManager, storageManager, aiManager };
 }
