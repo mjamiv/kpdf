@@ -3,6 +3,7 @@ import { PDFDocument } from 'pdf-lib';
 import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
+import { installPolyfills } from './polyfills';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TEST_PDF_PATH = path.join(__dirname, 'fixtures', 'test.pdf');
@@ -42,6 +43,7 @@ async function loadTestPdf(page: import('@playwright/test').Page) {
 
 test.describe('PDF loading', () => {
   test.beforeEach(async ({ page }) => {
+    await installPolyfills(page);
     await page.goto('/');
   });
 

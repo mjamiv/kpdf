@@ -1,7 +1,9 @@
 import { test, expect } from '@playwright/test';
+import { installPolyfills } from './polyfills';
 
 test.describe('App empty state', () => {
   test.beforeEach(async ({ page }) => {
+    await installPolyfills(page);
     await page.goto('/');
   });
 
