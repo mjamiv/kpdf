@@ -2,6 +2,8 @@
 
 PDF viewer + pro markup tool for local annotation workflows.
 
+access app live at: https://mjamiv.github.io/kpdf/
+
 ## Features
 
 ### Markup Tools (11 tools)
