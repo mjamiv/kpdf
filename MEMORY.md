@@ -1,45 +1,69 @@
 # MEMORY
 
-## Completed this session
-- Bootstrapped project from empty directory into React/Vite TypeScript app.
-- Implemented MVP PDF viewer + markup workflow:
-  - Open/drop PDF
-  - Render with pdf.js
-  - Markup tools (pen/rectangle/highlight/text)
-  - Zoom/page navigation
-  - Undo/clear page
-- Added PDF export pipeline with flatten support.
-- Added annotation schema v2 with metadata fields (`zIndex`, `author`, timestamps, `locked`).
-- Implemented persistence system:
-  - Sidecar JSON export/import
-  - localStorage autosave by document fingerprint
-  - Embedded payload in PDF attachment (`kpdf-annotations-v2.json`) when size under threshold
-  - Automatic sidecar-only fallback when payload exceeds threshold
-  - Legacy keyword payload read compatibility
-- Added tests:
-  - `src/pdfExport.test.ts`
-  - `src/annotationPersistence.test.ts`
-- Produced Phase 2/3 team execution plan in `docs/PHASE2_3_AGENT_PLAN.md`.
+## Project Overview
+kpdf is a React+Vite+TypeScript PDF viewer and markup tool. It uses pdfjs-dist for rendering and pdf-lib for export. All annotation coordinates are normalized [0,1] for zoom-agnostic storage.
 
-## Key decisions and tradeoffs
-- Chose normalized page coordinates for annotations to keep zoom/pan rendering stable.
-- Chose attachment embedding over metadata keywords for robustness.
-- Kept keyword decoding only for backward compatibility with earlier saved files.
-- Editable and flattened save are explicit modes; flattened mode skips editable embedding.
-- Sidecar export is always generated to avoid data loss and simplify recovery.
+## Completed Work (Phase 1 + Phase 2 + Phase 3)
 
-## Current state
-- App builds/tests/lints clean.
-- Persistence architecture is in place for next-phase features.
-- Repository directory is currently **not** a git repository (`.git` missing), so git-based wrap-up steps cannot run.
+### Phase 1 (baseline)
+- PDF viewer with pen/rect/highlight/text tools
+- 3-tier persistence: PDF attachment, sidecar JSON, localStorage
+- Editable vs flattened PDF export
 
-## Outstanding risks
-- Repeated editable saves may accumulate stale attachments depending on `pdf-lib` attachment handling.
-- Large PDFs with dense markups may hit payload threshold and rely on sidecar-only persistence.
-- No diagnostics UI yet to make persistence mode visible per save/load operation.
+### Phase 2 (pro markup UX)
+- Engine: reducer-based state (`useReducer`), inverse-action undo/redo (200-deep, 300ms coalescing)
+- Hit-testing: distance-to-segment, point-in-polygon (ray casting), bbox for all types
+- Selection: click/shift+click multi-select, locked filtering, HTML handles overlay
+- Transforms: move, resize (anchor-based), rotate, z-order ops
+- Tool registry: `ToolBehavior` interface with `onPointerDown/Move/Up`, `renderDraft`
+- 7 new tools: arrow, callout, cloud, measurement, polygon, stamp, select
+- Snapping/alignment guides, keyboard shortcuts for all tools
+- Text layer extraction, text-based highlight, text search
 
-## Next steps
-1. Implement Phase 2 item 1: selection/hit-test/transform handles.
-2. Implement undo/redo reducer with coalesced drag actions.
-3. Modularize `src/App.tsx` into engine/tools/workflow/components folders.
-4. Add Playwright e2e harness for open -> annotate -> save -> reopen flows.
+### Phase 3 (document workflows)
+- Multi-document tabs with per-tab PDF, annotations, undo history, dirty tracking
+- Stamps library (6 predefined: approved, rejected, revision, draft, final, confidential)
+- Comments panel with filtering by author/status/type, click-to-jump
+- Review mode (read-only, select-only tool restriction)
+- Report export: CSV generation with proper escaping, summary statistics
+
+## Architecture Decisions
+- **Inverse-action undo** (not snapshots) for memory efficiency
+- **HTML selection handles** (not canvas) to avoid canvas redraws on hover
+- **Tool behavior interface** — each tool is a pluggable module via registry
+- **Normalized [0,1] coordinates** preserved across all annotation types
+- **RESET_STATE action** for tab switching — replaces entire annotationsByPage
+- **stateRef pattern** in App.tsx to avoid stale closure in dispatch callbacks
+- **draftRef pattern** to keep draft in sync between React state and tool reads
+- **Schema v2 stays** — new types are additive, backward-compatible
+
+## Key File Paths
+- App shell: `src/App.tsx` (main integration)
+- Types: `src/types.ts` (all annotation types, Tool union)
+- Engine: `src/engine/` (state, history, hitTest, selection, transforms, utils)
+- Tools: `src/tools/` (registry, 11 tool files, snapping, shortcuts)
+- PDF: `src/pdf/` (textLayer, textHighlight, search)
+- Workflow: `src/workflow/` (documentStore, stamps, comments, reviewMode, reportExport)
+- Components: `src/components/` (TabBar, StatusBar, SelectionHandles, ShortcutHelpPanel, CommentsPanel)
+- Persistence: `src/annotationPersistence.ts`
+- Export: `src/pdfExport.ts`
+
+## Test Coverage
+- 97 tests across 9 test files (all passing)
+- Engine: state (20), history (11), hitTest (18), transforms (12)
+- Tools: snapping (6)
+- PDF: textLayer (15)
+- Workflow: reportExport (6)
+- Persistence: annotationPersistence (6), pdfExport (3)
+
+## ESLint Config
+- `argsIgnorePattern: '^_'` added to `@typescript-eslint/no-unused-vars` for tool no-op methods
+
+## Git History (7 commits on main)
+- Phase 1 baseline -> WP1-A (engine) -> WP1-B+WP2 (undo/selection) -> WP3+WP4 (tools/text) -> WP3-B (new tools) -> WP5-A+WP6 (integration/workflow) -> WP5-B (tabs)
+
+## Not Yet Done
+- Wire CommentsPanel and review mode toggle into App.tsx UI
+- E2E tests (Playwright)
+- Performance profiling (target: first-page <400ms, interactions >=50fps)
+- Cloud tool scalloped border rendering on canvas (currently renders as plain rect)
