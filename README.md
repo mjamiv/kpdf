@@ -9,7 +9,20 @@ access app live at: https://mjamiv.github.io/kpdf/
 ### Markup Tools (11 tools)
 - **Drawing**: Pen, Rectangle, Highlight, Arrow, Polygon
 - **Annotation**: Text, Callout, Cloud, Measurement, Stamp
-- **Selection**: Select tool with move, resize, and z-order control
+- **Selection**: Select tool with move, z-order control, and selection handles overlay
+
+### Viewer Controls
+- Keyboard zoom: **Ctrl/Cmd +**, **Ctrl/Cmd -**, **Ctrl/Cmd 0**
+- Mouse zoom: **Ctrl/Cmd + wheel** (anchor-aware zoom)
+- Fit modes: **Fit Width**, **Fit Page**, plus fixed zoom presets
+- Pan: toggle **Pan** mode (`H`) or hold **Space** for temporary pan
+- Free pan movement (unconstrained page drag) with **Center** reset
+- Page navigation: First/Prev/Next/Last, PageUp/PageDown/Home/End, direct page jump input
+
+### Tool Interaction Model
+- Default behavior returns to **Select** after creating an annotation
+- Double-click a tool to **lock** it for repeated use
+- Click locked tool again to **unlock**
 
 ### Engine
 - Reducer-based state with full undo/redo (200-deep, coalesced drag actions)
@@ -31,22 +44,16 @@ access app live at: https://mjamiv.github.io/kpdf/
 - Sidecar JSON alongside every save
 
 ### Document Workflow
-- Multi-document tabs with per-tab state, undo history, and dirty tracking
+- Multi-document tabs with per-tab page, zoom, fit mode, pan offsets, undo history, dirty tracking
 - Stamps library: Approved, Rejected, Revision, Draft, Final, Confidential
 - Comments panel with filtering by author, status, and type
 - Review mode (read-only) with tool restrictions
-- Keyboard shortcuts for all tools and actions
-
-### PDF Intelligence
-- Text layer extraction via `pdfjs` `getTextContent()`
-- Text-based highlighting with span position tracking
-- Text search with case-sensitive option
 
 ## Stack
 - React 19 + TypeScript + Vite
 - `pdfjs-dist` for rendering
 - `pdf-lib` for export + PDF attachment embedding
-- `vitest` for unit tests (97 tests)
+- `vitest` for unit tests (**102 tests**)
 
 ## Run
 ```bash
@@ -57,57 +64,59 @@ Open the Vite URL (usually `http://localhost:5173`).
 
 ## Quality Checks
 ```bash
-npm run test    # 97 unit tests
-npm run lint    # ESLint
-npm run build   # TypeScript + Vite build
+npm run lint
+npx vitest run src   # 102 unit tests
+npm run build
 ```
 
 ## Project Structure
 ```
 src/
-  App.tsx                    # Main app shell with useReducer, tool system, tabs
-  App.css                    # All styles
+  App.tsx                    # Main app shell and interaction controller
+  App.css                    # UI styles
   types.ts                   # Annotation types, tool union, shared types
   annotationPersistence.ts   # Load/save/sidecar/localStorage
   pdfExport.ts               # PDF export with flatten + attachment embedding
+  viewer/
+    controls.ts              # Zoom/page/fit control math
   engine/
-    actions.ts               # Action type union (13 action types)
-    state.ts                 # annotationReducer + computeInverse
-    history.ts               # UndoStack with coalescing (300ms window)
-    hitTest.ts               # Hit-testing for all annotation types
-    selection.ts             # Selection state management
-    transforms.ts            # Move/resize/rotate/z-order transforms
-    utils.ts                 # clamp01, randomId, normalizeRect, etc.
+    actions.ts
+    state.ts
+    history.ts
+    hitTest.ts
+    selection.ts
+    transforms.ts
+    utils.ts
   tools/
-    registry.ts              # ToolBehavior interface + tool registry
-    selectTool.ts            # Select, move, multi-select
-    penTool.ts               # Freehand drawing
-    rectTool.ts              # Rectangle + highlight
-    textTool.ts              # Text placement
-    arrowTool.ts             # Two-point arrow with head
-    calloutTool.ts           # Box + leader line + text
-    cloudTool.ts             # Scalloped-border rectangle
-    measurementTool.ts       # Distance measurement with label
-    polygonTool.ts           # Multi-click polygon, close on first point
-    stampTool.ts             # Click-to-place stamp
-    snapping.ts              # Alignment guides
-    shortcuts.ts             # Keyboard shortcut mapping
+    registry.ts
+    selectTool.ts
+    penTool.ts
+    rectTool.ts
+    textTool.ts
+    arrowTool.ts
+    calloutTool.ts
+    cloudTool.ts
+    measurementTool.ts
+    polygonTool.ts
+    stampTool.ts
+    snapping.ts
+    shortcuts.ts
   pdf/
-    textLayer.ts             # PDF text extraction + positioning
-    textHighlight.ts         # Text-based highlight computation
-    search.ts                # Full-text search
+    textLayer.ts
+    textHighlight.ts
+    search.ts
   components/
-    TabBar.tsx               # Multi-document tab bar
-    StatusBar.tsx             # Status message footer
-    SelectionHandles.tsx     # HTML resize/rotate handles overlay
-    ShortcutHelpPanel.tsx    # Keyboard shortcuts modal
-    CommentsPanel.tsx        # Comment list with filtering
+    TabBar.tsx
+    StatusBar.tsx
+    SelectionHandles.tsx
+    ShortcutHelpPanel.tsx
+    CommentsPanel.tsx
   workflow/
-    documentStore.ts         # Tab data model with dirty tracking
-    stamps.ts                # Stamp library (6 predefined stamps)
-    comments.ts              # Comment extraction + filtering
-    reviewMode.ts            # Read-only mode + tool restrictions
-    reportExport.ts          # CSV report generation + download
+    documentStore.ts
+    stamps.ts
+    comments.ts
+    reviewMode.ts
+    reportExport.ts
 ```
 
 ## Keyboard Shortcuts
@@ -120,10 +129,17 @@ src/
 | T | Text tool |
 | A | Arrow tool |
 | C | Callout tool |
-| O | Cloud tool |
+| K | Cloud tool |
 | M | Measurement tool |
 | G | Polygon tool |
 | S | Stamp tool |
+| Ctrl/Cmd + | Zoom in |
+| Ctrl/Cmd - | Zoom out |
+| Ctrl/Cmd 0 | Reset zoom |
+| PageUp/PageDown | Prev/Next page |
+| Home/End | First/Last page |
+| H (viewer) | Toggle pan mode |
+| Space (hold) | Temporary pan |
 | Ctrl+Z | Undo |
 | Ctrl+Shift+Z | Redo |
 | Delete | Remove selected |
@@ -132,3 +148,5 @@ src/
 
 ## Known Limitations
 - Bundle size is large due to pdf.js worker (~1.2MB)
+- Selection handles are visual; full handle drag-resize behavior is not fully wired yet
+- E2E coverage exists but still needs deeper annotation/export scenarios

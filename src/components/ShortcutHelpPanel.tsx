@@ -22,6 +22,13 @@ export default function ShortcutHelpPanel({ visible, onClose }: ShortcutHelpPane
             ))}
             <tr><td><kbd>Ctrl+Z</kbd></td><td>Undo</td></tr>
             <tr><td><kbd>Ctrl+Shift+Z</kbd></td><td>Redo</td></tr>
+            <tr><td><kbd>Ctrl/Cmd +</kbd></td><td>Zoom in</td></tr>
+            <tr><td><kbd>Ctrl/Cmd -</kbd></td><td>Zoom out</td></tr>
+            <tr><td><kbd>Ctrl/Cmd 0</kbd></td><td>Reset zoom</td></tr>
+            <tr><td><kbd>PageUp/PageDown</kbd></td><td>Prev/Next page</td></tr>
+            <tr><td><kbd>Home/End</kbd></td><td>First/Last page</td></tr>
+            <tr><td><kbd>H</kbd></td><td>Toggle pan mode</td></tr>
+            <tr><td><kbd>Space (hold)</kbd></td><td>Temporary pan</td></tr>
             <tr><td><kbd>Delete</kbd></td><td>Delete selected</td></tr>
             <tr><td><kbd>[</kbd></td><td>Send backward</td></tr>
             <tr><td><kbd>]</kbd></td><td>Bring forward</td></tr>
