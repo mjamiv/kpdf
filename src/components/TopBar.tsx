@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import Tooltip from './Tooltip';
 
 type TopBarProps = {
   pdfLoaded: boolean;
@@ -51,22 +52,32 @@ export default function TopBar(props: TopBarProps) {
     <header className="top-bar" role="banner">
       {/* Left: file + edit */}
       <div className="top-bar-group" role="group" aria-label="File">
-        <button className={`top-bar-btn sidebar-toggle${leftOpen ? ' active' : ''}`} onClick={onToggleLeft} disabled={!pdfLoaded} title="Toggle sidebar" aria-label="Toggle sidebar">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="1" y="2" width="14" height="12" rx="1"/><line x1="5" y1="2" x2="5" y2="14"/></svg>
-        </button>
-        <button className="top-bar-btn" onClick={onOpenFile} aria-label="Open PDF file" title="Open PDF">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 2h6l4 4v8a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1z"/><polyline points="9,2 9,6 13,6"/></svg>
-        </button>
-        <button className="top-bar-btn" onClick={onSave} disabled={!pdfLoaded || isBusy} aria-label="Save PDF" title="Save (Cmd+S)">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 14H4a1 1 0 01-1-1V3a1 1 0 011-1h6l3 3v9a1 1 0 01-1 1z"/><path d="M10 14v-4H6v4"/><path d="M6 2v3h5"/></svg>
-        </button>
+        <Tooltip content="Toggle sidebar" position="bottom">
+          <button className={`top-bar-btn sidebar-toggle${leftOpen ? ' active' : ''}`} onClick={onToggleLeft} disabled={!pdfLoaded} aria-label="Toggle sidebar">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="1" y="2" width="14" height="12" rx="1"/><line x1="5" y1="2" x2="5" y2="14"/></svg>
+          </button>
+        </Tooltip>
+        <Tooltip content="Open PDF" shortcut="Cmd+O" position="bottom">
+          <button className="top-bar-btn" onClick={onOpenFile} aria-label="Open PDF file">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 2h6l4 4v8a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1z"/><polyline points="9,2 9,6 13,6"/></svg>
+          </button>
+        </Tooltip>
+        <Tooltip content="Save" shortcut="Cmd+S" position="bottom">
+          <button className="top-bar-btn" onClick={onSave} disabled={!pdfLoaded || isBusy} aria-label="Save PDF">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 14H4a1 1 0 01-1-1V3a1 1 0 011-1h6l3 3v9a1 1 0 01-1 1z"/><path d="M10 14v-4H6v4"/><path d="M6 2v3h5"/></svg>
+          </button>
+        </Tooltip>
         <span className="top-bar-sep" />
-        <button className="top-bar-btn" onClick={onUndo} disabled={!pdfLoaded} title="Undo (Cmd+Z)" aria-label="Undo">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h6a3 3 0 010 6H7"/><polyline points="7,3 4,6 7,9"/></svg>
-        </button>
-        <button className="top-bar-btn" onClick={onRedo} disabled={!pdfLoaded} title="Redo (Cmd+Shift+Z)" aria-label="Redo">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 6H6a3 3 0 000 6h3"/><polyline points="9,3 12,6 9,9"/></svg>
-        </button>
+        <Tooltip content="Undo" shortcut="Cmd+Z" position="bottom">
+          <button className="top-bar-btn" onClick={onUndo} disabled={!pdfLoaded} aria-label="Undo">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h6a3 3 0 010 6H7"/><polyline points="7,3 4,6 7,9"/></svg>
+          </button>
+        </Tooltip>
+        <Tooltip content="Redo" shortcut="Cmd+Shift+Z" position="bottom">
+          <button className="top-bar-btn" onClick={onRedo} disabled={!pdfLoaded} aria-label="Redo">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 6H6a3 3 0 000 6h3"/><polyline points="9,3 12,6 9,9"/></svg>
+          </button>
+        </Tooltip>
       </div>
 
       {/* Center spacer */}
@@ -74,15 +85,23 @@ export default function TopBar(props: TopBarProps) {
 
       {/* Right: zoom + page nav + panels */}
       <div className="top-bar-group" role="group" aria-label="Zoom">
-        <button className="top-bar-btn" onClick={onZoomOut} disabled={!pdfLoaded} aria-label="Zoom out" title="Zoom Out">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="3" y1="7" x2="11" y2="7"/></svg>
-        </button>
+        <Tooltip content="Zoom Out" shortcut="Cmd+-" position="bottom">
+          <button className="top-bar-btn" onClick={onZoomOut} disabled={!pdfLoaded} aria-label="Zoom out">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="3" y1="7" x2="11" y2="7"/></svg>
+          </button>
+        </Tooltip>
         <span className="top-bar-readout">{zoomPercent}%</span>
-        <button className="top-bar-btn" onClick={onZoomIn} disabled={!pdfLoaded} aria-label="Zoom in" title="Zoom In">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="7" y1="3" x2="7" y2="11"/><line x1="3" y1="7" x2="11" y2="7"/></svg>
-        </button>
-        <button className={`top-bar-btn fit-btn${fitMode === 'width' ? ' active' : ''}`} onClick={onFitWidth} disabled={!pdfLoaded} aria-label="Fit width" title="Fit Width">W</button>
-        <button className={`top-bar-btn fit-btn${fitMode === 'page' ? ' active' : ''}`} onClick={onFitPage} disabled={!pdfLoaded} aria-label="Fit page" title="Fit Page">P</button>
+        <Tooltip content="Zoom In" shortcut="Cmd+=" position="bottom">
+          <button className="top-bar-btn" onClick={onZoomIn} disabled={!pdfLoaded} aria-label="Zoom in">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="7" y1="3" x2="7" y2="11"/><line x1="3" y1="7" x2="11" y2="7"/></svg>
+          </button>
+        </Tooltip>
+        <Tooltip content="Fit Width" position="bottom">
+          <button className={`top-bar-btn fit-btn${fitMode === 'width' ? ' active' : ''}`} onClick={onFitWidth} disabled={!pdfLoaded} aria-label="Fit width">W</button>
+        </Tooltip>
+        <Tooltip content="Fit Page" position="bottom">
+          <button className={`top-bar-btn fit-btn${fitMode === 'page' ? ' active' : ''}`} onClick={onFitPage} disabled={!pdfLoaded} aria-label="Fit page">P</button>
+        </Tooltip>
       </div>
 
       <span className="top-bar-sep" />
@@ -101,12 +120,16 @@ export default function TopBar(props: TopBarProps) {
       <span className="top-bar-sep" />
 
       <div className="top-bar-group" role="group" aria-label="Panels">
-        <button className={`top-bar-btn${rightOpen ? ' active' : ''}`} onClick={onToggleRight} disabled={!pdfLoaded} title="Toggle panel" aria-label="Toggle panel">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="1" y="2" width="14" height="12" rx="1"/><line x1="11" y1="2" x2="11" y2="14"/></svg>
-        </button>
-        <button className="top-bar-btn" onClick={onToggleCommandPalette} title="Command palette (Cmd+K)" aria-label="Command palette">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="1" y="4" width="14" height="9" rx="1"/><line x1="4" y1="7" x2="12" y2="7"/></svg>
-        </button>
+        <Tooltip content="Toggle panel" position="bottom">
+          <button className={`top-bar-btn${rightOpen ? ' active' : ''}`} onClick={onToggleRight} disabled={!pdfLoaded} aria-label="Toggle panel">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="1" y="2" width="14" height="12" rx="1"/><line x1="11" y1="2" x2="11" y2="14"/></svg>
+          </button>
+        </Tooltip>
+        <Tooltip content="Commands" shortcut="Cmd+K" position="bottom">
+          <button className="top-bar-btn" onClick={onToggleCommandPalette} aria-label="Command palette">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="1" y="4" width="14" height="9" rx="1"/><line x1="4" y1="7" x2="12" y2="7"/></svg>
+          </button>
+        </Tooltip>
       </div>
     </header>
   );

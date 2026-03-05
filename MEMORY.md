@@ -17,7 +17,7 @@ kpdf is a React + Vite + TypeScript PDF markup tool using `pdfjs-dist` for rende
 - Replaced monolithic Toolbar.tsx with slim TopBar.tsx (40px) + vertical ToolRail.tsx (46px)
 - 4-column layout: rail + sidebar + canvas + panel (was 3-column)
 - Right panel consolidated from 5 tabs to 3: Activity (comments + punch list), Markups, AI
-- Left sidebar: unified "Document" view with collapsible Sheets/Pages sections (replaced tab-based)
+- Left sidebar: unified "Document" view with collapsible Sheets/Pages sections
 - usePanelState: single `overlay` field replaces 5 boolean toggles
 - useCommandRegistry: 8 commands migrated from toolbar to Command Palette
 - StatusBar: shows active tool + "Cmd+K" hint
@@ -25,29 +25,29 @@ kpdf is a React + Vite + TypeScript PDF markup tool using `pdfjs-dist` for rende
 
 ### Canvas & Interaction Polish (Phase 2)
 - Canvas empty state: dashed-border drop zone with PDF icon + keyboard shortcut hints
-- Drag overlay: full-screen frosted glass "Drop PDF to open" on drag-over
-- Busy bar: animated 2px amber progress bar at viewport top during isBusy
-- Context menu: right-click on canvas for Delete/Deselect/SelectAll (ContextMenu.tsx + contextMenuItems.ts)
-- Tooltip component: delayed hover tooltips with shortcut kbd badges, 4 positions (Tooltip.tsx)
-- Sidebar/panel transitions smoothed (220ms, will-change hints)
-- Responsive breakpoints updated for TopBar/ToolRail layout
-- Old Toolbar.tsx deleted
+- Drag overlay, busy bar, context menu, Tooltip component
+- Sidebar/panel transitions smoothed, responsive breakpoints updated
+
+### Tooltips, Handle Resize, E2E Tests (Phase 2 follow-up)
+- Tooltip wired into all TopBar buttons (11) and ToolRail buttons (tools, color, pan, shortcuts)
+- Selection handle drag-resize fully wired: handleHandleDown tracks anchor/pointer, dispatches RESIZE_ANNOTATION with coalesce key via window pointer events
+- E2E tests rewritten for new UI: 8 empty-state tests + 8 PDF-loaded tests (tool rail, page nav, zoom, sidebar, panel tabs, tool groups)
 
 ## Key Decisions and Tradeoffs
 - Kept annotation commit logic in `dispatch` so tool auto-fallback to Select happens centrally
 - Persisted `fitMode` and `panX/panY` on DocumentTab for per-tab viewer context
 - Transform-based free pan for full operator control
 - Single `overlay` field in usePanelState ensures only one modal/popover open at a time
+- Handle resize uses window-level pointer events (not canvas) since handles are in a separate DOM layer
 
 ## Current State
 - Dev server: `npm run dev`
 - Lint: passing
 - Unit tests: **585 passing** (`npm test`)
 - Build: passing (`npm run build`)
-- All changes on `main` branch, ready to commit
 
 ## Next Best Steps
-1. Wire true drag-resize/rotate behavior from selection handles into reducer actions
-2. Add Tooltip wrapper to TopBar and ToolRail buttons (replacing raw `title` attrs)
-3. Add deeper E2E scenarios: annotation create/edit, tool lock, fit/pan flows, save/reload
-4. Optional performance pass: split heavy bundle paths and profile first render/interaction FPS
+1. Multi-select resize (currently only single-annotation)
+2. Rotate handle on selection
+3. Performance pass: bundle splitting, first-render profiling
+4. Real E2E with Playwright runner (current tests written but not run in CI)

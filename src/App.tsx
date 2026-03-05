@@ -110,6 +110,13 @@ export default function App() {
   const tabDataRef = useRef<Map<string, TabData>>(new Map());
   const panXRef = useRef(0);
   const panYRef = useRef(0);
+  const handleDragRef = useRef<{
+    active: boolean;
+    anchor: AnchorPosition;
+    annotationId: string;
+    startClientX: number;
+    startClientY: number;
+  }>({ active: false, anchor: 'se', annotationId: '', startClientX: 0, startClientY: 0 });
 
   // Tab state
   const [tabs, setTabs] = useState<DocumentTab[]>([]);
@@ -563,7 +570,45 @@ export default function App() {
     return () => { window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); window.removeEventListener('blur', onBlur); };
   }, [pdfDoc]);
 
-  const handleHandleDown = useCallback((_anchor: AnchorPosition, e: React.PointerEvent) => { e.preventDefault(); }, []);
+  const handleHandleDown = useCallback((anchor: AnchorPosition, e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const selIds = Array.from(selection.ids);
+    if (selIds.length !== 1) return;
+    handleDragRef.current = {
+      active: true,
+      anchor,
+      annotationId: selIds[0],
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+    };
+
+    const onMove = (ev: PointerEvent) => {
+      if (!handleDragRef.current.active) return;
+      const canvas = overlayCanvasRef.current;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      const dx = (ev.clientX - handleDragRef.current.startClientX) / rect.width;
+      const dy = (ev.clientY - handleDragRef.current.startClientY) / rect.height;
+      if (Math.abs(dx) > 0.001 || Math.abs(dy) > 0.001) {
+        dispatch(
+          { type: 'RESIZE_ANNOTATION', page: pageNumber, id: handleDragRef.current.annotationId, anchor: handleDragRef.current.anchor, dx, dy },
+          `resize-${handleDragRef.current.annotationId}`,
+        );
+        handleDragRef.current.startClientX = ev.clientX;
+        handleDragRef.current.startClientY = ev.clientY;
+      }
+    };
+
+    const onUp = () => {
+      handleDragRef.current.active = false;
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }, [selection, dispatch, pageNumber]);
 
   // Tab management
   const switchToTab = useCallback((tabId: string) => {

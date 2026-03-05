@@ -4,6 +4,7 @@ import { TOOL_SHORTCUTS } from '../tools/shortcuts';
 import { isToolAllowed, type ReviewState } from '../workflow/reviewMode';
 import { getToolAriaLabel } from '../utils/accessibility';
 import ToolIcon from './ToolIcon';
+import Tooltip from './Tooltip';
 
 type ToolRailProps = {
   tool: Tool;
@@ -69,17 +70,17 @@ export default function ToolRail(props: ToolRailProps) {
               </button>
             )}
             {visibleTools.map((id) => (
-              <button
-                key={id}
-                className={`rail-btn${tool === id ? ' active' : ''}${lockedTool === id ? ' locked' : ''}`}
-                onClick={(e) => { if (e.detail === 1) onToolClick(id); }}
-                onDoubleClick={(e) => { e.preventDefault(); onToolDoubleClick(id); }}
-                disabled={!pdfLoaded || !isToolAllowed(id, reviewState)}
-                title={`${toolLabel(id)}${lockedTool === id ? ' (locked)' : ''} [${toolShortcut(id)}]`}
-                aria-label={getToolAriaLabel(id)}
-              >
-                <ToolIcon tool={id} size={18} />
-              </button>
+              <Tooltip key={id} content={toolLabel(id)} shortcut={toolShortcut(id)} position="right">
+                <button
+                  className={`rail-btn${tool === id ? ' active' : ''}${lockedTool === id ? ' locked' : ''}`}
+                  onClick={(e) => { if (e.detail === 1) onToolClick(id); }}
+                  onDoubleClick={(e) => { e.preventDefault(); onToolDoubleClick(id); }}
+                  disabled={!pdfLoaded || !isToolAllowed(id, reviewState)}
+                  aria-label={getToolAriaLabel(id)}
+                >
+                  <ToolIcon tool={id} size={18} />
+                </button>
+              </Tooltip>
             ))}
             {!isBasic && <div className="rail-group-divider" />}
           </div>
@@ -89,41 +90,44 @@ export default function ToolRail(props: ToolRailProps) {
       <div className="rail-spacer" />
 
       {/* Color picker */}
-      <input
-        className="rail-color"
-        type="color"
-        value={color}
-        onChange={(e) => onSetColor(e.target.value)}
-        disabled={!pdfLoaded}
-        title="Markup color"
-        aria-label="Markup color"
-      />
+      <Tooltip content="Markup color" position="right">
+        <input
+          className="rail-color"
+          type="color"
+          value={color}
+          onChange={(e) => onSetColor(e.target.value)}
+          disabled={!pdfLoaded}
+          aria-label="Markup color"
+        />
+      </Tooltip>
 
       {/* Pan mode */}
-      <button
-        className={`rail-btn rail-bottom-btn${panMode ? ' active' : ''}`}
-        onClick={onTogglePan}
-        disabled={!pdfLoaded}
-        title="Pan mode (H / hold Space)"
-        aria-label="Pan mode"
-      >
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M9 2v14M2 9h14M5 5l4-3 4 3M5 13l4 3 4-3" />
-        </svg>
-      </button>
+      <Tooltip content="Pan mode" shortcut="H" position="right">
+        <button
+          className={`rail-btn rail-bottom-btn${panMode ? ' active' : ''}`}
+          onClick={onTogglePan}
+          disabled={!pdfLoaded}
+          aria-label="Pan mode"
+        >
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 2v14M2 9h14M5 5l4-3 4 3M5 13l4 3 4-3" />
+          </svg>
+        </button>
+      </Tooltip>
 
       {/* Shortcuts */}
-      <button
-        className="rail-btn rail-bottom-btn"
-        onClick={onToggleShortcuts}
-        title="Keyboard shortcuts (?)"
-        aria-label="Keyboard shortcuts"
-      >
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-          <circle cx="9" cy="9" r="7" />
-          <text x="9" y="12.5" fill="currentColor" fontSize="10" fontFamily="Outfit, sans-serif" textAnchor="middle" stroke="none" fontWeight="600">?</text>
-        </svg>
-      </button>
+      <Tooltip content="Shortcuts" shortcut="?" position="right">
+        <button
+          className="rail-btn rail-bottom-btn"
+          onClick={onToggleShortcuts}
+          aria-label="Keyboard shortcuts"
+        >
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <circle cx="9" cy="9" r="7" />
+            <text x="9" y="12.5" fill="currentColor" fontSize="10" fontFamily="Outfit, sans-serif" textAnchor="middle" stroke="none" fontWeight="600">?</text>
+          </svg>
+        </button>
+      </Tooltip>
     </nav>
   );
 }

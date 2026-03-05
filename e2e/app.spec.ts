@@ -11,39 +11,50 @@ test.describe('App empty state', () => {
     await expect(page.getByRole('heading', { name: 'KPDF Markup' })).toBeVisible();
   });
 
-  test('shows the "Open or drop a PDF" prompt', async ({ page }) => {
-    await expect(page.getByText('Open or drop a PDF')).toBeVisible();
+  test('shows the drop prompt', async ({ page }) => {
+    await expect(page.getByText('Drop a PDF here')).toBeVisible();
+  });
+
+  test('shows keyboard shortcut hints', async ({ page }) => {
+    await expect(page.getByText('Cmd+O')).toBeVisible();
+    await expect(page.getByText('Cmd+K')).toBeVisible();
   });
 
   test('Open PDF button is visible and enabled', async ({ page }) => {
-    const openBtn = page.getByRole('button', { name: 'Open PDF' });
+    const openBtn = page.getByRole('button', { name: 'Open PDF file' });
     await expect(openBtn).toBeVisible();
     await expect(openBtn).toBeEnabled();
   });
 
-  test('toolbar tools are disabled when no PDF is loaded', async ({ page }) => {
-    const toolNames = [
-      'Select (V)',
-      'Pen (P)',
-      'Rectangle (R)',
-      'Highlight (H)',
-      'Text (T)',
-      'Arrow (A)',
-      'Callout (C)',
-      'Cloud (K)',
-      'Measurement (M)',
-      'Polygon (G)',
-      'Stamp (S)',
+  test('tool rail buttons are disabled when no PDF is loaded', async ({ page }) => {
+    const toolLabels = [
+      'Select and move annotations',
+      'Draw freehand strokes',
+      'Draw rectangles',
+      'Highlight areas',
+      'Add text notes',
+      'Draw ellipses',
     ];
-
-    for (const name of toolNames) {
-      const btn = page.getByRole('button', { name });
+    for (const label of toolLabels) {
+      const btn = page.getByRole('button', { name: label });
       await expect(btn).toBeDisabled();
     }
   });
 
-  test('Save PDF and Import Sidecar buttons are disabled when no PDF is loaded', async ({ page }) => {
+  test('Save button is disabled when no PDF is loaded', async ({ page }) => {
     await expect(page.getByRole('button', { name: 'Save PDF' })).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Import Sidecar' })).toBeDisabled();
+  });
+
+  test('top bar has sidebar and panel toggle buttons', async ({ page }) => {
+    await expect(page.getByRole('button', { name: 'Toggle sidebar' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Toggle panel' })).toBeVisible();
+  });
+
+  test('command palette button is visible', async ({ page }) => {
+    await expect(page.getByRole('button', { name: 'Command palette' })).toBeVisible();
+  });
+
+  test('status bar shows Cmd+K hint', async ({ page }) => {
+    await expect(page.locator('.status-hint')).toHaveText('Cmd+K');
   });
 });

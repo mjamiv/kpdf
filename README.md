@@ -21,7 +21,7 @@ Access app live at: https://mjamiv.github.io/kpdf/
 - **Right panel**: 3-tab interface — Activity (comments + punch list), Markups, AI Assist
 - **Canvas**: Drop zone empty state with keyboard shortcut hints, drag overlay for PDF drop
 - **Context menu**: Right-click on canvas for quick annotation actions (delete, deselect)
-- **Tooltips**: Delayed hover tooltips with keyboard shortcut badges
+- **Tooltips**: Delayed hover tooltips with keyboard shortcut badges on all TopBar and ToolRail buttons
 - **Loading indicator**: Animated progress bar during PDF operations
 - **Command palette**: Fuzzy-search commands via Cmd+K / Ctrl+K (includes migrated toolbar actions)
 - **Status bar**: Shows active tool, locked state, and Cmd+K hint
@@ -171,6 +171,6 @@ src/
 
 ## Known Limitations
 - Bundle size is large due to pdf.js worker (~1.2MB)
-- Selection handles are visual; full handle drag-resize is not fully wired yet
+- Selection handle drag-resize works for single-annotation selection; multi-select resize is visual only
 - Collaboration features are local-only (no WebSocket server yet)
 - AI features use local heuristics (no cloud AI provider integrated yet)
