@@ -1,5 +1,6 @@
-import { PDFDocument, rgb } from 'pdf-lib';
+import type { PDFDocument as PDFDocumentType, PDFPage } from 'pdf-lib';
 import type { Annotation, Point } from './types';
+import { clamp01 } from './engine/utils';
 
 const EPSILON = 1e-6;
 
@@ -8,12 +9,6 @@ export function toPdfPoint(point: Point, pageWidth: number, pageHeight: number):
     x: point.x * pageWidth,
     y: pageHeight - point.y * pageHeight,
   };
-}
-
-export function clamp01(value: number): number {
-  if (value < 0) return 0;
-  if (value > 1) return 1;
-  return value;
 }
 
 function parseHex(hex: string): { r: number; g: number; b: number } {
@@ -50,14 +45,15 @@ export function toLineSegments(points: Point[]): Array<{ start: Point; end: Poin
 }
 
 function drawAnnotations(
-  page: ReturnType<PDFDocument['getPages']>[number],
+  page: PDFPage,
   annotations: Annotation[],
+  rgbFn: typeof import('pdf-lib').rgb,
 ): void {
   const { width, height } = page.getSize();
 
   annotations.forEach((annotation) => {
     const parsed = parseHex(annotation.color);
-    const color = rgb(parsed.r, parsed.g, parsed.b);
+    const color = rgbFn(parsed.r, parsed.g, parsed.b);
 
     switch (annotation.type) {
       case 'pen': {
@@ -313,14 +309,15 @@ export async function exportPdf(
   annotationsByPage: Record<number, Annotation[]>,
   options: ExportOptions,
 ): Promise<ExportPdfResult> {
-  const pdfDoc = await PDFDocument.load(originalBytes);
+  const { PDFDocument, rgb } = await import('pdf-lib');
+  const pdfDoc: PDFDocumentType = await PDFDocument.load(originalBytes);
   const pages = pdfDoc.getPages();
 
   if (options.flatten) {
     pages.forEach((page, pageIndex) => {
       const annotations = annotationsByPage[pageIndex + 1] ?? [];
       if (annotations.length === 0) return;
-      drawAnnotations(page, annotations);
+      drawAnnotations(page, annotations, rgb);
     });
   }
 

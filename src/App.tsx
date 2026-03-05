@@ -21,7 +21,7 @@ import type { Annotation, AnnotationsByPage, AnchorPosition, Point, Tool } from 
 import { annotationReducer, computeInverse, type DocumentState } from './engine/state';
 import type { Action } from './engine/actions';
 import { createUndoStack, type UndoStack } from './engine/history';
-import { clamp01, nextZIndex, randomId, sortedAnnotations } from './engine/utils';
+import { clamp01, nextZIndex, pointsBoundingBox, randomId, sortedAnnotations } from './engine/utils';
 import { createSelectionState, deselectAll, type SelectionState } from './engine/selection';
 import { getTool } from './tools';
 import { getToolForKey, TOOL_SHORTCUTS } from './tools/shortcuts';
@@ -31,6 +31,11 @@ import StatusBar from './components/StatusBar';
 import TabBar from './components/TabBar';
 import type { DocumentTab } from './workflow/documentStore';
 import { createDocumentTab } from './workflow/documentStore';
+import CommentsPanel from './components/CommentsPanel';
+import { createReviewState, isToolAllowed, type ReviewState } from './workflow/reviewMode';
+import { isTextDraft, FONT_SIZE as TEXT_FONT_SIZE } from './tools/textTool';
+import { STAMP_LIBRARY } from './workflow/stamps';
+import { getActiveStamp, setActiveStamp } from './tools/stampTool';
 
 type TabData = {
   pdfDoc: PDFDocumentProxy;
@@ -47,11 +52,70 @@ function baseName(fileName: string): string {
   return fileName.replace(/\.pdf$/i, '') || 'document';
 }
 
+type SelectDraftInfo = {
+  toolType: 'select';
+  isDragging: boolean;
+  totalDx: number;
+  totalDy: number;
+};
+
+function isSelectDraft(d: unknown): d is SelectDraftInfo {
+  return d !== null && typeof d === 'object' && (d as SelectDraftInfo).toolType === 'select';
+}
+
+function applyDragOffset(ann: Annotation, dx: number, dy: number): Annotation {
+  switch (ann.type) {
+    case 'pen':
+    case 'polygon':
+      return { ...ann, points: ann.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) };
+    case 'rectangle':
+    case 'highlight':
+    case 'text':
+    case 'cloud':
+    case 'stamp':
+      return { ...ann, x: ann.x + dx, y: ann.y + dy };
+    case 'arrow':
+    case 'measurement':
+      return { ...ann, start: { x: ann.start.x + dx, y: ann.start.y + dy }, end: { x: ann.end.x + dx, y: ann.end.y + dy } };
+    case 'callout':
+      return { ...ann, box: { ...ann.box, x: ann.box.x + dx, y: ann.box.y + dy }, leaderTarget: { x: ann.leaderTarget.x + dx, y: ann.leaderTarget.y + dy } };
+    default:
+      return ann;
+  }
+}
+
+function getBoundingBox(ann: Annotation): { x: number; y: number; w: number; h: number } | null {
+  switch (ann.type) {
+    case 'rectangle':
+    case 'highlight':
+    case 'cloud':
+    case 'stamp':
+      return { x: ann.x, y: ann.y, w: ann.width, h: ann.height };
+    case 'text':
+      return { x: ann.x, y: ann.y - 0.02, w: 0.1, h: 0.025 };
+    case 'pen':
+    case 'polygon': {
+      const bb = pointsBoundingBox(ann.points);
+      return { x: bb.minX, y: bb.minY, w: bb.maxX - bb.minX, h: bb.maxY - bb.minY };
+    }
+    case 'arrow':
+    case 'measurement': {
+      const bb = pointsBoundingBox([ann.start, ann.end]);
+      return { x: bb.minX, y: bb.minY, w: bb.maxX - bb.minX, h: bb.maxY - bb.minY };
+    }
+    case 'callout':
+      return { x: ann.box.x, y: ann.box.y, w: ann.box.width, h: ann.box.height };
+    default:
+      return null;
+  }
+}
+
 function drawAnnotations(
   canvas: HTMLCanvasElement,
   annotations: Annotation[],
   draft: unknown,
   activeTool: Tool,
+  selectedIds?: Set<string>,
 ) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -127,7 +191,37 @@ function drawAnnotations(
     ctx.textBaseline = 'alphabetic';
   };
 
-  sortedAnnotations(annotations).forEach((ann) => {
+  const dragDraft = isSelectDraft(draft) && draft.isDragging ? draft : null;
+
+  sortedAnnotations(annotations).forEach((rawAnn) => {
+    // Apply visual drag offset to selected annotations
+    let ann = rawAnn;
+    if (dragDraft && selectedIds?.has(rawAnn.id)) {
+      const dx = dragDraft.totalDx;
+      const dy = dragDraft.totalDy;
+      ann = applyDragOffset(rawAnn, dx, dy);
+    }
+    // Locked annotation visual indicator
+    if (ann.locked) {
+      ctx.save();
+      ctx.setLineDash([4, 3]);
+      ctx.strokeStyle = 'rgba(120, 120, 120, 0.5)';
+      ctx.lineWidth = 1;
+      // Draw a dashed border around the annotation's bounding area
+      const bb = getBoundingBox(ann);
+      if (bb) {
+        ctx.strokeRect(bb.x * w - 2, bb.y * h - 2, bb.w * w + 4, bb.h * h + 4);
+        // Draw small lock indicator
+        const lx = bb.x * w + bb.w * w - 6;
+        const ly = bb.y * h - 8;
+        ctx.fillStyle = 'rgba(120, 120, 120, 0.7)';
+        ctx.font = '10px ui-sans-serif, system-ui';
+        ctx.fillText('\u{1F512}', lx, ly);
+      }
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
     switch (ann.type) {
       case 'pen':
         drawPen(ann.points, ann.color, ann.thickness);
@@ -224,7 +318,11 @@ export default function App() {
   const [isBusy, setIsBusy] = useState(false);
   const [status, setStatus] = useState('Drop a PDF or click Open PDF.');
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showComments, setShowComments] = useState(false);
+  const [reviewMode, setReviewMode] = useState<ReviewState>(createReviewState);
   const [canvasRect, setCanvasRect] = useState<DOMRect | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [activeStampId, setActiveStampId] = useState(getActiveStamp().id);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const pdfDoc = activeTab ? tabDataRef.current.get(activeTab.id)?.pdfDoc ?? null : null;
@@ -270,6 +368,8 @@ export default function App() {
 
   const stateRef = useRef(state);
   stateRef.current = state;
+  const savePdfRef = useRef<() => void>(() => {});
+  const closeTabRef = useRef<(id: string) => void>(() => {});
 
   const dispatch = useCallback((action: Action, coalesceKey?: string) => {
     const inverse = computeInverse(stateRef.current, action);
@@ -289,19 +389,34 @@ export default function App() {
   useEffect(() => {
     const overlay = overlayCanvasRef.current;
     if (!overlay) return;
-    drawAnnotations(overlay, currentAnnotations, draft, tool);
-  }, [currentAnnotations, draft, tool]);
+    drawAnnotations(overlay, currentAnnotations, draft, tool, selection.ids);
+  }, [currentAnnotations, draft, tool, selection]);
+
+  // Keep canvasRect up to date on window resize
+  useEffect(() => {
+    const overlay = overlayCanvasRef.current;
+    if (!overlay) return;
+    const observer = new ResizeObserver(() => {
+      setCanvasRect(overlay.getBoundingClientRect());
+    });
+    observer.observe(overlay);
+    return () => observer.disconnect();
+  }, [pdfDoc, pageNumber]);
 
   useEffect(() => {
     if (!pdfDoc || !documentFingerprint) return;
-    const doc = createAnnotationDocument(annotationsByPage, author, documentFingerprint);
-    saveAnnotationsToLocalStorage(documentFingerprint, doc);
-    // Keep tab's annotationsByPage in sync
+    // Keep tab's annotationsByPage in sync (immediate)
     if (activeTabId) {
       setTabs((prev) => prev.map((t) =>
         t.id === activeTabId ? { ...t, annotationsByPage } : t
       ));
     }
+    // Debounce localStorage write to avoid blocking during drawing/dragging
+    const timer = setTimeout(() => {
+      const doc = createAnnotationDocument(annotationsByPage, author, documentFingerprint);
+      saveAnnotationsToLocalStorage(documentFingerprint, doc);
+    }, 1500);
+    return () => clearTimeout(timer);
   }, [annotationsByPage, author, documentFingerprint, pdfDoc, activeTabId]);
 
   useEffect(() => {
@@ -325,19 +440,18 @@ export default function App() {
       const renderTask = page.render({ canvasContext: context, viewport, canvas: pdfCanvas });
       activeRenderRef.current = renderTask;
       try { await renderTask.promise; } catch (e) { if ((e as Error).name !== 'RenderingCancelledException') throw e; }
-      if (isCurrent) {
-        drawAnnotations(overlayCanvas, annotationsByPage[pageNumber] ?? [], draft, tool);
-        setIsBusy(false);
-      }
+      if (isCurrent) setIsBusy(false);
     };
     renderPage().catch((e) => { setStatus(`Render error: ${(e as Error).message}`); setIsBusy(false); });
     return () => { isCurrent = false; activeRenderRef.current?.cancel(); };
-  }, [pdfDoc, pageNumber, zoom, annotationsByPage, draft, tool]);
+  }, [pdfDoc, pageNumber, zoom]);
+
+  const canvasRectRef = useRef(canvasRect);
+  canvasRectRef.current = canvasRect;
 
   const toNormalizedPoint = (event: React.PointerEvent<HTMLCanvasElement>): Point => {
-    const canvas = overlayCanvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
-    const rect = canvas.getBoundingClientRect();
+    const rect = canvasRectRef.current;
+    if (!rect) return { x: 0, y: 0 };
     return { x: clamp01((event.clientX - rect.left) / rect.width), y: clamp01((event.clientY - rect.top) / rect.height) };
   };
 
@@ -355,25 +469,32 @@ export default function App() {
     randomId,
   }), [dispatch, pageNumber, color, author, currentAnnotations, selection, setDraft]);
 
+  const toNormalizedEvent = (event: React.PointerEvent<HTMLCanvasElement>) => ({
+    point: toNormalizedPoint(event),
+    shiftKey: event.shiftKey,
+    ctrlKey: event.ctrlKey,
+    metaKey: event.metaKey,
+  });
+
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (!pdfDoc) return;
     const activeTool = getTool(tool);
     if (!activeTool) return;
-    activeTool.onPointerDown(makeToolCtx(), { point: toNormalizedPoint(event), shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey });
+    activeTool.onPointerDown(makeToolCtx(), toNormalizedEvent(event));
   };
 
   const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (!pdfDoc) return;
     const activeTool = getTool(tool);
     if (!activeTool) return;
-    activeTool.onPointerMove(makeToolCtx(), { point: toNormalizedPoint(event), shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey });
+    activeTool.onPointerMove(makeToolCtx(), toNormalizedEvent(event));
   };
 
   const handlePointerUp = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (!pdfDoc) return;
     const activeTool = getTool(tool);
     if (!activeTool) return;
-    activeTool.onPointerUp(makeToolCtx(), { point: toNormalizedPoint(event), shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey });
+    activeTool.onPointerUp(makeToolCtx(), toNormalizedEvent(event));
   };
 
   useEffect(() => {
@@ -405,19 +526,95 @@ export default function App() {
       }
       if (e.key === '[' && selection.ids.size > 0) { e.preventDefault(); for (const id of selection.ids) dispatch({ type: 'SET_Z_ORDER', page: pageNumber, id, op: 'down' }); return; }
       if (e.key === ']' && selection.ids.size > 0) { e.preventDefault(); for (const id of selection.ids) dispatch({ type: 'SET_Z_ORDER', page: pageNumber, id, op: 'up' }); return; }
+      if (e.key === 'Escape') { setShowShortcuts(false); setDraft(null); return; }
       if (e.key === '?') { setShowShortcuts((v) => !v); return; }
 
+      // Standard shortcuts
+      if ((e.ctrlKey || e.metaKey) && e.key === 'o') {
+        e.preventDefault();
+        fileInputRef.current?.click();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        if (pdfDoc && !isBusy) savePdfRef.current();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'w') {
+        e.preventDefault();
+        if (activeTabId) closeTabRef.current(activeTabId);
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) {
+        e.preventDefault();
+        setZoom((v) => Math.min(3, +(v + 0.1).toFixed(2)));
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+        e.preventDefault();
+        setZoom((v) => Math.max(0.5, +(v - 0.1).toFixed(2)));
+        return;
+      }
+      if (e.key === 'PageDown' || e.key === 'ArrowRight') {
+        if (pageNumber < pageCount) { e.preventDefault(); setDraft(null); setPageNumber((v) => Math.min(pageCount, v + 1)); }
+        return;
+      }
+      if (e.key === 'PageUp' || e.key === 'ArrowLeft') {
+        if (pageNumber > 1) { e.preventDefault(); setDraft(null); setPageNumber((v) => Math.max(1, v - 1)); }
+        return;
+      }
+
       const newTool = getToolForKey(e.key);
-      if (newTool) { setTool(newTool); setDraft(null); if (newTool !== 'select') setSelection(deselectAll()); }
+      if (newTool && isToolAllowed(newTool, reviewMode)) { setTool(newTool); setDraft(null); if (newTool !== 'select') setSelection(deselectAll()); }
 
       const at = getTool(tool);
       if (at?.onKeyDown) at.onKeyDown(makeToolCtx(), e);
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [pdfDoc, tool, selection, currentAnnotations, pageNumber, dispatch, dispatchSilent, setDraft, makeToolCtx]);
+  }, [pdfDoc, tool, selection, currentAnnotations, pageNumber, pageCount, dispatch, dispatchSilent, setDraft, makeToolCtx, reviewMode, isBusy, activeTabId, setZoom, setPageNumber]);
 
-  const handleHandleDown = useCallback((_anchor: AnchorPosition, e: React.PointerEvent) => { e.preventDefault(); }, []);
+  // beforeunload guard for unsaved changes
+  useEffect(() => {
+    const hasDirty = tabs.some((t) => t.dirty);
+    if (!hasDirty) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [tabs]);
+
+  const handleHandleDown = useCallback((anchor: AnchorPosition, e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const overlay = overlayCanvasRef.current;
+    if (!overlay || selection.ids.size === 0) return;
+    const rect = overlay.getBoundingClientRect();
+    let lastX = (e.clientX - rect.left) / rect.width;
+    let lastY = (e.clientY - rect.top) / rect.height;
+    const target = e.currentTarget as HTMLElement;
+    target.setPointerCapture(e.pointerId);
+
+    const onMove = (ev: PointerEvent) => {
+      const nx = (ev.clientX - rect.left) / rect.width;
+      const ny = (ev.clientY - rect.top) / rect.height;
+      const dx = nx - lastX;
+      const dy = ny - lastY;
+      if (Math.abs(dx) > 0.001 || Math.abs(dy) > 0.001) {
+        for (const id of selection.ids) {
+          dispatch({ type: 'RESIZE_ANNOTATION', page: pageNumber, id, anchor, dx, dy });
+        }
+        lastX = nx;
+        lastY = ny;
+      }
+    };
+    const onUp = () => {
+      target.removeEventListener('pointermove', onMove);
+      target.removeEventListener('pointerup', onUp);
+      target.releasePointerCapture(e.pointerId);
+    };
+    target.addEventListener('pointermove', onMove);
+    target.addEventListener('pointerup', onUp);
+  }, [selection, pageNumber, dispatch]);
 
   const switchToTab = useCallback((tabId: string) => {
     if (tabId === activeTabId) return;
@@ -467,6 +664,7 @@ export default function App() {
     setDraft(null);
     setSelection(deselectAll());
   }, [activeTabId, setDraft]);
+  closeTabRef.current = closeTab;
 
   const loadPdf = async (bytes: Uint8Array, name: string) => {
     setIsBusy(true);
@@ -551,6 +749,7 @@ export default function App() {
 
   const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
+    setIsDragOver(false);
     const file = event.dataTransfer.files?.[0];
     if (!file || file.type !== 'application/pdf') { setStatus('Drop a valid PDF file.'); return; }
     try { await loadPdf(new Uint8Array(await file.arrayBuffer()), file.name); }
@@ -589,56 +788,207 @@ export default function App() {
       setIsBusy(false);
     } catch (e) { setStatus(`Save error: ${(e as Error).message}`); setIsBusy(false); }
   };
+  savePdfRef.current = savePdf;
 
   const handleUndo = () => { const inv = historyRef.current.undo(); if (inv) dispatchSilent(inv); };
   const handleRedo = () => { const fwd = historyRef.current.redo(); if (fwd) dispatchSilent(fwd); };
   const clearPage = () => {
     const removed = currentAnnotations.filter((a) => !a.locked);
-    if (removed.length > 0) dispatch({ type: 'CLEAR_PAGE', page: pageNumber, removed });
+    if (removed.length === 0) return;
+    if (!window.confirm(`Clear ${removed.length} annotation${removed.length > 1 ? 's' : ''} on this page?`)) return;
+    dispatch({ type: 'CLEAR_PAGE', page: pageNumber, removed });
   };
+
+  const commitTextDraft = useCallback((text: string) => {
+    const d = draftRef.current;
+    if (!isTextDraft(d)) return;
+    if (text.trim()) {
+      const timestamp = new Date().toISOString();
+      dispatch({
+        type: 'ADD_ANNOTATION',
+        page: pageNumber,
+        annotation: {
+          id: randomId(),
+          zIndex: nextZIndex(currentAnnotations),
+          color: d.color,
+          author: d.author,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          locked: false,
+          type: 'text',
+          text: text.trim(),
+          x: d.x,
+          y: d.y,
+          fontSize: TEXT_FONT_SIZE,
+        },
+      });
+    }
+    setDraft(null);
+  }, [dispatch, pageNumber, currentAnnotations, setDraft]);
+
+  const textDraft = isTextDraft(draft) ? draft : null;
 
   const toolbarTools: Tool[] = ['select', 'pen', 'rectangle', 'highlight', 'text', 'arrow', 'callout', 'cloud', 'measurement', 'polygon', 'stamp'];
   const toolLabel = (t: Tool) => TOOL_SHORTCUTS.find((s) => s.tool === t)?.label ?? t;
+  const toolShortLabel: Record<string, string> = {
+    select: 'Select', pen: 'Pen', rectangle: 'Rect', highlight: 'Hilite',
+    text: 'Text', arrow: 'Arrow', callout: 'Callout', cloud: 'Cloud',
+    measurement: 'Measure', polygon: 'Polygon', stamp: 'Stamp',
+  };
 
   return (
-    <div className="app" onDrop={handleDrop} onDragOver={(e) => e.preventDefault()}>
-      <header className="toolbar">
+    <div
+      className={`app${isDragOver ? ' drag-over' : ''}`}
+      onDrop={handleDrop}
+      onDragOver={(e) => e.preventDefault()}
+      onDragEnter={() => setIsDragOver(true)}
+      onDragLeave={(e) => { if (e.currentTarget === e.target) setIsDragOver(false); }}
+    >
+      <header className="toolbar" role="toolbar" aria-label="Markup tools">
         <input ref={fileInputRef} type="file" accept="application/pdf" onChange={handleFileChange} hidden />
         <input ref={sidecarInputRef} type="file" accept="application/json,.json,.kpdf.json" onChange={handleSidecarFileChange} hidden />
-        <button onClick={() => fileInputRef.current?.click()}>Open PDF</button>
-        <button onClick={() => sidecarInputRef.current?.click()} disabled={!pdfDoc || isBusy}>Import Sidecar</button>
-        <button onClick={savePdf} disabled={!pdfDoc || isBusy}>Save PDF</button>
+
+        {/* File actions */}
+        <div className="action-group">
+          <button className="btn-primary" onClick={() => fileInputRef.current?.click()}>Open</button>
+          <button onClick={() => sidecarInputRef.current?.click()} disabled={!pdfDoc || isBusy}>Import</button>
+          <button onClick={savePdf} disabled={!pdfDoc || isBusy}>Save</button>
+        </div>
         <label className="toggle-row">
           <input type="checkbox" checked={flattenOnSave} onChange={(e) => setFlattenOnSave(e.target.checked)} disabled={!pdfDoc || isBusy} />
           Flatten
         </label>
+
         <span className="divider" />
-        {toolbarTools.map((id) => (
-          <button key={id} className={tool === id ? 'active' : ''} onClick={() => { setTool(id); setDraft(null); if (id !== 'select') setSelection(deselectAll()); }} disabled={!pdfDoc} title={toolLabel(id)}>
-            {toolLabel(id)}
-          </button>
-        ))}
-        <input className="color" type="color" value={color} onChange={(e) => setColor(e.target.value)} disabled={!pdfDoc} title="Markup color" />
+
+        {/* Tool palette */}
+        <div className="tool-group">
+          {toolbarTools.map((id) => (
+            <button key={id} className={tool === id ? 'active' : ''} aria-pressed={tool === id} onClick={() => { if (!isToolAllowed(id, reviewMode)) return; setTool(id); setDraft(null); if (id !== 'select') setSelection(deselectAll()); }} disabled={!pdfDoc || !isToolAllowed(id, reviewMode)} title={toolLabel(id)}>
+              {toolShortLabel[id] ?? id}
+            </button>
+          ))}
+        </div>
+
+        <input className="color" type="color" value={color} onChange={(e) => setColor(e.target.value)} disabled={!pdfDoc} title="Markup color" aria-label="Markup color" />
+        {tool === 'stamp' && (
+          <select
+            className="stamp-select"
+            value={activeStampId}
+            onChange={(e) => {
+              const stamp = STAMP_LIBRARY.find((s) => s.id === e.target.value);
+              if (stamp) { setActiveStamp(stamp); setActiveStampId(stamp.id); }
+            }}
+            aria-label="Stamp type"
+          >
+            {STAMP_LIBRARY.map((s) => (
+              <option key={s.id} value={s.id}>{s.label}</option>
+            ))}
+          </select>
+        )}
+
+        <span className="divider" />
+
+        {/* Edit actions */}
+        <div className="action-group">
+          <button onClick={handleUndo} disabled={!pdfDoc} title="Undo (Ctrl+Z)">Undo</button>
+          <button onClick={handleRedo} disabled={!pdfDoc} title="Redo (Ctrl+Shift+Z)">Redo</button>
+          <button onClick={clearPage} disabled={!pdfDoc}>Clear</button>
+        </div>
+
+        <button onClick={() => setShowShortcuts((v) => !v)} title="Shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
+
+        <span className="divider" />
+
+        {/* Zoom */}
+        <div className="action-group">
+          <button onClick={() => setZoom((v) => Math.max(0.5, +(v - 0.1).toFixed(2)))} disabled={!pdfDoc} aria-label="Zoom out">-</button>
+          <input
+            className="zoom-input"
+            type="text"
+            value={`${Math.round(zoom * 100)}%`}
+            disabled={!pdfDoc}
+            aria-label="Zoom level"
+            onFocus={(e) => { e.target.value = String(Math.round(zoom * 100)); e.target.select(); }}
+            onBlur={(e) => { e.target.value = `${Math.round(zoom * 100)}%`; }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const val = parseInt((e.target as HTMLInputElement).value, 10);
+                if (!isNaN(val)) setZoom(Math.max(50, Math.min(300, val)) / 100);
+                (e.target as HTMLInputElement).blur();
+              }
+              if (e.key === 'Escape') (e.target as HTMLInputElement).blur();
+              e.stopPropagation();
+            }}
+          />
+          <button onClick={() => setZoom((v) => Math.min(3, +(v + 0.1).toFixed(2)))} disabled={!pdfDoc} aria-label="Zoom in">+</button>
+        </div>
+
+        <span className="divider" />
+
+        {/* Page navigation */}
+        <div className="action-group">
+          <button onClick={() => { setDraft(null); setPageNumber((v) => Math.max(1, v - 1)); }} disabled={!pdfDoc || pageNumber <= 1} aria-label="Previous page">Prev</button>
+          <input
+            className="page-input"
+            type="text"
+            value={pageNumber}
+            disabled={!pdfDoc}
+            aria-label="Page number"
+            onFocus={(e) => e.target.select()}
+            onBlur={(e) => { e.target.value = String(pageNumber); }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const val = parseInt((e.target as HTMLInputElement).value, 10);
+                if (!isNaN(val)) { setDraft(null); setPageNumber(Math.max(1, Math.min(pageCount, val))); }
+                (e.target as HTMLInputElement).blur();
+              }
+              if (e.key === 'Escape') (e.target as HTMLInputElement).blur();
+              e.stopPropagation();
+            }}
+          />
+          <span className="page-total">/ {pageCount || 0}</span>
+          <button onClick={() => { setDraft(null); setPageNumber((v) => Math.min(pageCount, v + 1)); }} disabled={!pdfDoc || pageNumber >= pageCount} aria-label="Next page">Next</button>
+        </div>
+
+        <span className="divider" />
+
         <label className="author-row">
           Author
           <input className="author-input" value={author} onChange={(e) => setAuthor(e.target.value)} disabled={!pdfDoc} />
         </label>
+
         <span className="divider" />
-        <button onClick={handleUndo} disabled={!pdfDoc} title="Undo (Ctrl+Z)">Undo</button>
-        <button onClick={handleRedo} disabled={!pdfDoc} title="Redo (Ctrl+Shift+Z)">Redo</button>
-        <button onClick={clearPage} disabled={!pdfDoc}>Clear Page</button>
-        <button onClick={() => setShowShortcuts((v) => !v)} title="Shortcuts (?)">?</button>
-        <span className="divider" />
-        <button onClick={() => setZoom((v) => Math.max(0.5, +(v - 0.1).toFixed(2)))} disabled={!pdfDoc}>-</button>
-        <span>{Math.round(zoom * 100)}%</span>
-        <button onClick={() => setZoom((v) => Math.min(3, +(v + 0.1).toFixed(2)))} disabled={!pdfDoc}>+</button>
-        <span className="divider" />
-        <button onClick={() => { setDraft(null); setPageNumber((v) => Math.max(1, v - 1)); }} disabled={!pdfDoc || pageNumber <= 1}>Prev</button>
-        <span>{pageNumber} / {pageCount || 0}</span>
-        <button onClick={() => { setDraft(null); setPageNumber((v) => Math.min(pageCount, v + 1)); }} disabled={!pdfDoc || pageNumber >= pageCount}>Next</button>
+
+        {/* Review & Comments */}
+        <div className="action-group">
+          <button
+            className={reviewMode.active ? 'active' : ''}
+            onClick={() => {
+              setReviewMode((prev) => {
+                const next = { active: !prev.active };
+                if (next.active) { setTool('select'); setDraft(null); setSelection(deselectAll()); }
+                return next;
+              });
+            }}
+            disabled={!pdfDoc}
+            title="Toggle review mode (read-only)"
+          >
+            Review
+          </button>
+          <button
+            className={showComments ? 'active' : ''}
+            onClick={() => setShowComments((v) => !v)}
+            disabled={!pdfDoc}
+            title="Toggle comments panel"
+          >
+            Comments
+          </button>
+        </div>
       </header>
       <TabBar tabs={tabs} activeTabId={activeTabId} onSelectTab={switchToTab} onCloseTab={closeTab} />
       <main className="canvas-shell">
+        {isBusy && <div className="loading-overlay"><div className="spinner" /></div>}
         {!pdfDoc ? (
           <div className="empty-state"><h1>KPDF Markup</h1><p>Open or drop a PDF to start marking up.</p></div>
         ) : (
@@ -649,9 +999,36 @@ export default function App() {
             <SelectionHandles selection={selection} annotations={currentAnnotations}
               canvasWidth={overlayCanvasRef.current?.width ?? 0} canvasHeight={overlayCanvasRef.current?.height ?? 0}
               canvasRect={canvasRect} onHandleDown={handleHandleDown} />
+            {textDraft && canvasRect && (
+              <input
+                className="text-input-overlay"
+                autoFocus
+                style={{
+                  left: textDraft.x * canvasRect.width,
+                  top: textDraft.y * canvasRect.height,
+                  color: textDraft.color,
+                  fontSize: Math.max(TEXT_FONT_SIZE * (overlayCanvasRef.current?.width ?? 800), 14),
+                }}
+                onBlur={(e) => commitTextDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { commitTextDraft((e.target as HTMLInputElement).value); e.preventDefault(); }
+                  if (e.key === 'Escape') { setDraft(null); e.preventDefault(); }
+                  e.stopPropagation();
+                }}
+              />
+            )}
           </div>
         )}
       </main>
+      <CommentsPanel
+        visible={showComments}
+        annotationsByPage={annotationsByPage}
+        onJumpTo={(page, _annotationId) => {
+          setPageNumber(page);
+          setDraft(null);
+        }}
+        onClose={() => setShowComments(false)}
+      />
       <StatusBar status={status} />
       <ShortcutHelpPanel visible={showShortcuts} onClose={() => setShowShortcuts(false)} />
     </div>

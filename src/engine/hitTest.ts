@@ -1,4 +1,5 @@
-import type { Point, Annotation } from '../types.ts';
+import type { Point, Annotation } from '../types';
+import { pointsBoundingBox } from './utils';
 
 export function distanceToLineSegment(point: Point, a: Point, b: Point): number {
   const dx = b.x - a.x;
@@ -34,19 +35,16 @@ export function pointInPolygon(point: Point, vertices: Point[]): boolean {
 
 export function boundingBox(annotation: Annotation): { x: number; y: number; width: number; height: number } {
   switch (annotation.type) {
-    case 'pen': {
+    case 'pen':
+    case 'polygon': {
       if (annotation.points.length === 0) return { x: 0, y: 0, width: 0, height: 0 };
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      for (const p of annotation.points) {
-        if (p.x < minX) minX = p.x;
-        if (p.y < minY) minY = p.y;
-        if (p.x > maxX) maxX = p.x;
-        if (p.y > maxY) maxY = p.y;
-      }
+      const { minX, minY, maxX, maxY } = pointsBoundingBox(annotation.points);
       return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
     }
     case 'rectangle':
     case 'highlight':
+    case 'cloud':
+    case 'stamp':
       return { x: annotation.x, y: annotation.y, width: annotation.width, height: annotation.height };
     case 'text': {
       const h = annotation.fontSize * 1.2;
@@ -72,21 +70,16 @@ export function boundingBox(annotation: Annotation): { x: number; y: number; wid
       const maxY = Math.max(by2, annotation.leaderTarget.y);
       return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
     }
-    case 'cloud':
-    case 'stamp':
-      return { x: annotation.x, y: annotation.y, width: annotation.width, height: annotation.height };
-    case 'polygon': {
-      if (annotation.points.length === 0) return { x: 0, y: 0, width: 0, height: 0 };
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      for (const p of annotation.points) {
-        if (p.x < minX) minX = p.x;
-        if (p.y < minY) minY = p.y;
-        if (p.x > maxX) maxX = p.x;
-        if (p.y > maxY) maxY = p.y;
-      }
-      return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
-    }
   }
+}
+
+function pointInRect(point: Point, x: number, y: number, width: number, height: number, tolerance: number): boolean {
+  return (
+    point.x >= x - tolerance &&
+    point.x <= x + width + tolerance &&
+    point.y >= y - tolerance &&
+    point.y <= y + height + tolerance
+  );
 }
 
 export function pointInAnnotation(point: Point, annotation: Annotation, tolerance: number = 0.01): boolean {
@@ -106,20 +99,12 @@ export function pointInAnnotation(point: Point, annotation: Annotation, toleranc
     }
     case 'rectangle':
     case 'highlight':
-      return (
-        point.x >= annotation.x - tolerance &&
-        point.x <= annotation.x + annotation.width + tolerance &&
-        point.y >= annotation.y - tolerance &&
-        point.y <= annotation.y + annotation.height + tolerance
-      );
+    case 'cloud':
+    case 'stamp':
+      return pointInRect(point, annotation.x, annotation.y, annotation.width, annotation.height, tolerance);
     case 'text': {
       const bb = boundingBox(annotation);
-      return (
-        point.x >= bb.x - tolerance &&
-        point.x <= bb.x + bb.width + tolerance &&
-        point.y >= bb.y - tolerance &&
-        point.y <= bb.y + bb.height + tolerance
-      );
+      return pointInRect(point, bb.x, bb.y, bb.width, bb.height, tolerance);
     }
     case 'arrow':
     case 'measurement': {
@@ -128,23 +113,10 @@ export function pointInAnnotation(point: Point, annotation: Annotation, toleranc
     }
     case 'callout': {
       const box = annotation.box;
-      const inBox =
-        point.x >= box.x - tolerance &&
-        point.x <= box.x + box.width + tolerance &&
-        point.y >= box.y - tolerance &&
-        point.y <= box.y + box.height + tolerance;
-      if (inBox) return true;
+      if (pointInRect(point, box.x, box.y, box.width, box.height, tolerance)) return true;
       const boxCenter: Point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
       return distanceToLineSegment(point, boxCenter, annotation.leaderTarget) < tolerance;
     }
-    case 'cloud':
-    case 'stamp':
-      return (
-        point.x >= annotation.x - tolerance &&
-        point.x <= annotation.x + annotation.width + tolerance &&
-        point.y >= annotation.y - tolerance &&
-        point.y <= annotation.y + annotation.height + tolerance
-      );
     case 'polygon': {
       if (annotation.points.length < 2) return false;
       if (annotation.points.length >= 3 && pointInPolygon(point, annotation.points)) return true;

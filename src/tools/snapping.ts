@@ -25,25 +25,15 @@ export function computeSnap(
 
   for (const ann of targets) {
     const bb = boundingBox(ann);
-    const edges = {
-      left: bb.x,
-      right: bb.x + bb.width,
-      centerX: bb.x + bb.width / 2,
-      top: bb.y,
-      bottom: bb.y + bb.height,
-      centerY: bb.y + bb.height / 2,
-    };
 
-    // X-axis snapping
-    for (const [, val] of Object.entries({ left: edges.left, right: edges.right, centerX: edges.centerX })) {
+    for (const val of [bb.x, bb.x + bb.width, bb.x + bb.width / 2]) {
       if (Math.abs(point.x - val) < tolerance) {
         sx = val;
         guides.push({ axis: 'x', position: val });
       }
     }
 
-    // Y-axis snapping
-    for (const [, val] of Object.entries({ top: edges.top, bottom: edges.bottom, centerY: edges.centerY })) {
+    for (const val of [bb.y, bb.y + bb.height, bb.y + bb.height / 2]) {
       if (Math.abs(point.y - val) < tolerance) {
         sy = val;
         guides.push({ axis: 'y', position: val });

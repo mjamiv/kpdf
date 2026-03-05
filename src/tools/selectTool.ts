@@ -9,6 +9,8 @@ type SelectDraft = {
   dragOrigin: Point;
   lastPoint: Point;
   isDragging: boolean;
+  totalDx: number;
+  totalDy: number;
 };
 
 function isSelectDraft(draft: unknown): draft is SelectDraft {
@@ -32,7 +34,7 @@ const selectTool: ToolBehavior = {
         ctx.setSelection(selectAnnotation(ctx.selection, hit.id, ctx.annotations));
       }
 
-      ctx.setDraft({ toolType: 'select', dragOrigin: e.point, lastPoint: e.point, isDragging: false } as SelectDraft);
+      ctx.setDraft({ toolType: 'select', dragOrigin: e.point, lastPoint: e.point, isDragging: false, totalDx: 0, totalDy: 0 } as SelectDraft);
     } else {
       ctx.setSelection(deselectAll());
       ctx.setDraft(null);
@@ -48,23 +50,36 @@ const selectTool: ToolBehavior = {
     const dy = e.point.y - draft.lastPoint.y;
 
     if (Math.abs(dx) > 0.001 || Math.abs(dy) > 0.001) {
+      ctx.setDraft({
+        ...draft,
+        lastPoint: e.point,
+        isDragging: true,
+        totalDx: draft.totalDx + dx,
+        totalDy: draft.totalDy + dy,
+      });
+    }
+  },
+
+  onPointerUp(ctx: ToolContext) {
+    const draft = ctx.draft;
+    if (isSelectDraft(draft) && draft.isDragging && ctx.selection.ids.size > 0) {
       for (const id of ctx.selection.ids) {
         ctx.dispatch({
           type: 'MOVE_ANNOTATION',
           page: ctx.page,
           id,
-          dx,
-          dy,
+          dx: draft.totalDx,
+          dy: draft.totalDy,
         });
       }
-      ctx.setDraft({ ...draft, lastPoint: e.point, isDragging: true });
     }
-  },
-
-  onPointerUp(ctx: ToolContext) {
     ctx.setDraft(null);
   },
 };
+
+// renderDraft is not needed for the select tool — the annotations
+// are redrawn at their committed positions. The visual offset during
+// drag is handled by the main drawAnnotations call using the draft delta.
 
 registerTool(selectTool);
 export default selectTool;

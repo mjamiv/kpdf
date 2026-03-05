@@ -44,7 +44,7 @@ PDF viewer + pro markup tool for local annotation workflows.
 - React 19 + TypeScript + Vite
 - `pdfjs-dist` for rendering
 - `pdf-lib` for export + PDF attachment embedding
-- `vitest` for unit tests (97 tests)
+- `vitest` for unit tests (153 tests)
 
 ## Run
 ```bash
@@ -55,7 +55,7 @@ Open the Vite URL (usually `http://localhost:5173`).
 
 ## Quality Checks
 ```bash
-npm run test    # 97 unit tests
+npm run test    # 153 unit tests
 npm run lint    # ESLint
 npm run build   # TypeScript + Vite build
 ```
@@ -128,8 +128,26 @@ src/
 | [ / ] | Z-order down/up |
 | ? | Show shortcuts |
 
+### UX & Accessibility
+- Professional dark-theme design system with CSS custom properties
+- ARIA roles/attributes on toolbar, tabs, status bar, and panels
+- Focus-visible outlines for keyboard navigation
+- Interactive zoom and page number inputs (click-to-edit)
+- Locked annotation visual indicator (dashed border + lock icon)
+- Inline text input overlay (replaces browser prompt)
+- Drag-over visual feedback for file drops
+- Loading spinner during PDF load
+- Beforeunload guard for unsaved changes
+
+### Performance
+- Dynamic `import()` for pdf-lib (435 kB main + 654 kB lazy chunk)
+- Debounced localStorage autosave (1.5s)
+- Batched drag dispatches (single action on pointerUp)
+- O(1) pen point append (mutable push)
+- Cached canvasRect via ResizeObserver for coordinate conversion
+- Split PDF render useEffect (only re-renders on page/zoom change)
+
 ## Known Limitations
 - Bundle size is large due to pdf.js worker (~1.2MB)
-- CommentsPanel and review mode toggle not yet wired into App.tsx UI
 - No E2E tests yet (Playwright planned)
 - Cloud tool renders as simple rectangle (scalloped border is visual only in export)

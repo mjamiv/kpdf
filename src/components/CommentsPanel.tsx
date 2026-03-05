@@ -29,7 +29,9 @@ export default function CommentsPanel({ visible, annotationsByPage, onJumpTo, on
     <div className="comments-panel">
       <div className="comments-header">
         <h3>Comments ({filtered.length})</h3>
-        <button onClick={onClose}>x</button>
+        <button onClick={onClose} aria-label="Close panel">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="1" y1="1" x2="11" y2="11"/><line x1="11" y1="1" x2="1" y2="11"/></svg>
+        </button>
       </div>
       <div className="comments-filters">
         <select value={filterAuthor} onChange={(e) => setFilterAuthor(e.target.value)}>

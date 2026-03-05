@@ -28,15 +28,3 @@ export function toggleAnnotation(state: SelectionState, id: string, annotations:
 export function deselectAll(): SelectionState {
   return createSelectionState();
 }
-
-export function isSelected(state: SelectionState, id: string): boolean {
-  return state.ids.has(id);
-}
-
-export function getSelectedAnnotations(state: SelectionState, annotations: Annotation[]): Annotation[] {
-  return annotations.filter(a => state.ids.has(a.id));
-}
-
-export function filterSelectable(annotations: Annotation[]): Annotation[] {
-  return annotations.filter(a => !a.locked);
-}

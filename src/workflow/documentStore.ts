@@ -29,10 +29,3 @@ export function createDocumentTab(
   };
 }
 
-export function markDirty(tab: DocumentTab): DocumentTab {
-  return tab.dirty ? tab : { ...tab, dirty: true };
-}
-
-export function markClean(tab: DocumentTab): DocumentTab {
-  return !tab.dirty ? tab : { ...tab, dirty: false };
-}
