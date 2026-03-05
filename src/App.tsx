@@ -21,16 +21,18 @@ import type { Annotation, AnnotationsByPage, AnchorPosition, Point, Tool } from 
 import { annotationReducer, computeInverse, type DocumentState } from './engine/state';
 import type { Action } from './engine/actions';
 import { createUndoStack, type UndoStack } from './engine/history';
-import { clamp01, nextZIndex, randomId, sortedAnnotations } from './engine/utils';
-import { createSelectionState, deselectAll, type SelectionState } from './engine/selection';
+import { clamp01, nextZIndex, randomId, sortedAnnotations, drawCloudShape } from './engine/utils';
+import { createSelectionState, deselectAll, selectAnnotation, type SelectionState } from './engine/selection';
 import { getTool } from './tools';
 import { getToolForKey, TOOL_SHORTCUTS } from './tools/shortcuts';
 import SelectionHandles from './components/SelectionHandles';
 import ShortcutHelpPanel from './components/ShortcutHelpPanel';
 import StatusBar from './components/StatusBar';
 import TabBar from './components/TabBar';
+import CommentsPanel from './components/CommentsPanel';
 import type { DocumentTab } from './workflow/documentStore';
 import { createDocumentTab } from './workflow/documentStore';
+import { createReviewState, isToolAllowed, type ReviewState } from './workflow/reviewMode';
 
 type TabData = {
   pdfDoc: PDFDocumentProxy;
@@ -160,7 +162,7 @@ function drawAnnotations(
         const cx = ann.x * w, cy = ann.y * h, cw = ann.width * w, ch = ann.height * h;
         ctx.strokeStyle = ann.color;
         ctx.lineWidth = Math.max(0.0025 * w, 1.5);
-        ctx.strokeRect(cx, cy, cw, ch);
+        drawCloudShape(ctx, cx, cy, cw, ch);
         break;
       }
       case 'polygon':
@@ -225,6 +227,8 @@ export default function App() {
   const [status, setStatus] = useState('Drop a PDF or click Open PDF.');
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [canvasRect, setCanvasRect] = useState<DOMRect | null>(null);
+  const [showComments, setShowComments] = useState(false);
+  const [reviewState, setReviewState] = useState<ReviewState>(createReviewState);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const pdfDoc = activeTab ? tabDataRef.current.get(activeTab.id)?.pdfDoc ?? null : null;
@@ -267,6 +271,31 @@ export default function App() {
       setDraftState(value);
     }
   }, []);
+
+  const setToolSafe = useCallback((newTool: Tool) => {
+    if (!isToolAllowed(newTool, reviewState)) return;
+    setTool(newTool);
+  }, [reviewState]);
+
+  const toggleReviewMode = useCallback(() => {
+    setReviewState((prev) => {
+      const next = { active: !prev.active };
+      if (next.active) {
+        setTool('select');
+        setDraft(null);
+        setSelection(deselectAll());
+      }
+      return next;
+    });
+  }, [setDraft]);
+
+  const handleCommentJump = useCallback((page: number, annotationId: string) => {
+    setPageNumber(page);
+    setTool('select');
+    setDraft(null);
+    const pageAnnotations = annotationsByPage[page] ?? [];
+    setSelection((prev) => selectAnnotation(prev, annotationId, pageAnnotations));
+  }, [setPageNumber, setDraft, annotationsByPage]);
 
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -408,14 +437,14 @@ export default function App() {
       if (e.key === '?') { setShowShortcuts((v) => !v); return; }
 
       const newTool = getToolForKey(e.key);
-      if (newTool) { setTool(newTool); setDraft(null); if (newTool !== 'select') setSelection(deselectAll()); }
+      if (newTool && isToolAllowed(newTool, reviewState)) { setTool(newTool); setDraft(null); if (newTool !== 'select') setSelection(deselectAll()); }
 
       const at = getTool(tool);
       if (at?.onKeyDown) at.onKeyDown(makeToolCtx(), e);
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [pdfDoc, tool, selection, currentAnnotations, pageNumber, dispatch, dispatchSilent, setDraft, makeToolCtx]);
+  }, [pdfDoc, tool, selection, currentAnnotations, pageNumber, dispatch, dispatchSilent, setDraft, makeToolCtx, reviewState]);
 
   const handleHandleDown = useCallback((_anchor: AnchorPosition, e: React.PointerEvent) => { e.preventDefault(); }, []);
 
@@ -602,7 +631,7 @@ export default function App() {
 
   return (
     <div className="app" onDrop={handleDrop} onDragOver={(e) => e.preventDefault()}>
-      <header className="toolbar">
+      <header className={`toolbar${reviewState.active ? ' review-active' : ''}`}>
         <input ref={fileInputRef} type="file" accept="application/pdf" onChange={handleFileChange} hidden />
         <input ref={sidecarInputRef} type="file" accept="application/json,.json,.kpdf.json" onChange={handleSidecarFileChange} hidden />
         <button onClick={() => fileInputRef.current?.click()}>Open PDF</button>
@@ -614,7 +643,7 @@ export default function App() {
         </label>
         <span className="divider" />
         {toolbarTools.map((id) => (
-          <button key={id} className={tool === id ? 'active' : ''} onClick={() => { setTool(id); setDraft(null); if (id !== 'select') setSelection(deselectAll()); }} disabled={!pdfDoc} title={toolLabel(id)}>
+          <button key={id} className={tool === id ? 'active' : ''} onClick={() => { setToolSafe(id); setDraft(null); if (id !== 'select') setSelection(deselectAll()); }} disabled={!pdfDoc || !isToolAllowed(id, reviewState)} title={toolLabel(id)}>
             {toolLabel(id)}
           </button>
         ))}
@@ -628,6 +657,8 @@ export default function App() {
         <button onClick={handleRedo} disabled={!pdfDoc} title="Redo (Ctrl+Shift+Z)">Redo</button>
         <button onClick={clearPage} disabled={!pdfDoc}>Clear Page</button>
         <button onClick={() => setShowShortcuts((v) => !v)} title="Shortcuts (?)">?</button>
+        <button className={showComments ? 'active' : ''} onClick={() => setShowComments((v) => !v)} disabled={!pdfDoc}>Comments</button>
+        <button className={reviewState.active ? 'active review-toggle' : 'review-toggle'} onClick={toggleReviewMode} disabled={!pdfDoc}>Review</button>
         <span className="divider" />
         <button onClick={() => setZoom((v) => Math.max(0.5, +(v - 0.1).toFixed(2)))} disabled={!pdfDoc}>-</button>
         <span>{Math.round(zoom * 100)}%</span>
@@ -653,6 +684,12 @@ export default function App() {
         )}
       </main>
       <StatusBar status={status} />
+      <CommentsPanel
+        visible={showComments}
+        annotationsByPage={annotationsByPage}
+        onJumpTo={handleCommentJump}
+        onClose={() => setShowComments(false)}
+      />
       <ShortcutHelpPanel visible={showShortcuts} onClose={() => setShowShortcuts(false)} />
     </div>
   );

@@ -1,7 +1,7 @@
 import type { ToolBehavior, ToolContext, NormalizedPointerEvent } from './registry';
 import type { Point } from '../types';
 import { registerTool } from './registry';
-import { normalizeRect } from '../engine/utils';
+import { normalizeRect, drawCloudShape } from '../engine/utils';
 
 type CloudDraft = {
   toolType: 'cloud';
@@ -66,41 +66,7 @@ const cloudTool: ToolBehavior = {
 
     ctx2d.strokeStyle = '#111827';
     ctx2d.lineWidth = 1.5;
-
-    // Draw scalloped border using arcs along each edge
-    const arcRadius = 8;
-    ctx2d.beginPath();
-
-    // Top edge
-    const topArcs = Math.max(Math.round(rw / (arcRadius * 2)), 1);
-    const topStep = rw / topArcs;
-    for (let i = 0; i < topArcs; i++) {
-      const cx = x + topStep * i + topStep / 2;
-      ctx2d.arc(cx, y, topStep / 2, Math.PI, 0, false);
-    }
-
-    // Right edge
-    const rightArcs = Math.max(Math.round(rh / (arcRadius * 2)), 1);
-    const rightStep = rh / rightArcs;
-    for (let i = 0; i < rightArcs; i++) {
-      const cy = y + rightStep * i + rightStep / 2;
-      ctx2d.arc(x + rw, cy, rightStep / 2, -Math.PI / 2, Math.PI / 2, false);
-    }
-
-    // Bottom edge
-    for (let i = topArcs - 1; i >= 0; i--) {
-      const cx = x + topStep * i + topStep / 2;
-      ctx2d.arc(cx, y + rh, topStep / 2, 0, Math.PI, false);
-    }
-
-    // Left edge
-    for (let i = rightArcs - 1; i >= 0; i--) {
-      const cy = y + rightStep * i + rightStep / 2;
-      ctx2d.arc(x, cy, rightStep / 2, Math.PI / 2, -Math.PI / 2, false);
-    }
-
-    ctx2d.closePath();
-    ctx2d.stroke();
+    drawCloudShape(ctx2d, x, y, rw, rh);
   },
 };
 
