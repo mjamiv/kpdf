@@ -35,6 +35,7 @@ export type CommandItem = {
 
 export type CommandRegistryOptions = {
   setTool: (tool: Tool) => void;
+  setLockedTool?: (tool: Tool | null) => void;
   undo: () => void;
   redo: () => void;
   canUndo: boolean;
@@ -47,7 +48,6 @@ export type CommandRegistryOptions = {
   togglePanels?: Record<string, () => void>;
   exportAnnotations?: () => void;
   exportPdf?: () => void;
-  // Extended commands (moved from toolbar to command palette)
   clearPage?: () => void;
   toggleReview?: () => void;
   toggleFlatten?: () => void;
@@ -56,6 +56,7 @@ export type CommandRegistryOptions = {
   exportXfdf?: () => void;
   toggleScaleCalibration?: () => void;
   toggleToolPresets?: () => void;
+  toggleScrollZoom?: () => void;
 };
 
 export function useCommandRegistry(options: CommandRegistryOptions): CommandItem[] {
@@ -78,7 +79,6 @@ export function useCommandRegistry(options: CommandRegistryOptions): CommandItem
   return useMemo(() => {
     const commands: CommandItem[] = [];
 
-    // Tool commands from shortcuts
     for (const shortcut of TOOL_SHORTCUTS) {
       commands.push({
         id: `tool-${shortcut.tool}`,
@@ -88,6 +88,17 @@ export function useCommandRegistry(options: CommandRegistryOptions): CommandItem
         category: 'tool',
         action: () => setTool(shortcut.tool),
       });
+
+      if (options.setLockedTool) {
+        const lockTool = options.setLockedTool;
+        commands.push({
+          id: `tool-${shortcut.tool}-lock`,
+          label: `Tool: ${shortcut.label.replace(/ \(.\)$/, '')} (Lock)`,
+          description: `Switch to ${shortcut.tool} tool and lock it`,
+          category: 'tool',
+          action: () => { setTool(shortcut.tool); lockTool(shortcut.tool); },
+        });
+      }
     }
 
     // Undo/Redo
@@ -219,6 +230,9 @@ export function useCommandRegistry(options: CommandRegistryOptions): CommandItem
     if (options.toggleToolPresets) {
       commands.push({ id: 'action-tool-presets', label: 'Tool Presets', description: 'Load discipline presets', category: 'action', action: options.toggleToolPresets });
     }
+    if (options.toggleScrollZoom) {
+      commands.push({ id: 'action-scroll-zoom', label: 'Toggle Scroll-to-Zoom', description: 'Zoom on scroll without Ctrl', category: 'action', action: options.toggleScrollZoom });
+    }
 
     // Export commands
     if (exportAnnotations) {
@@ -262,6 +276,17 @@ export function buildCommands(options: CommandRegistryOptions): CommandItem[] {
       category: 'tool',
       action: () => options.setTool(shortcut.tool),
     });
+
+    if (options.setLockedTool) {
+      const lockTool = options.setLockedTool;
+      commands.push({
+        id: `tool-${shortcut.tool}-lock`,
+        label: `Tool: ${shortcut.label.replace(/ \(.\)$/, '')} (Lock)`,
+        description: `Switch to ${shortcut.tool} tool and lock it`,
+        category: 'tool',
+        action: () => { options.setTool(shortcut.tool); lockTool(shortcut.tool); },
+      });
+    }
   }
 
   commands.push({

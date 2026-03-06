@@ -1,5 +1,5 @@
-export const VIEWER_MIN_ZOOM = 0.4;
-export const VIEWER_MAX_ZOOM = 4;
+export const VIEWER_MIN_ZOOM = 0.1;
+export const VIEWER_MAX_ZOOM = 8;
 export const VIEWER_ZOOM_STEP = 0.1;
 export const VIEWER_FRAME_PADDING = 48;
 

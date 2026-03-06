@@ -24,6 +24,7 @@ export const TOOL_SHORTCUTS: ShortcutDef[] = [
   { key: 'd', tool: 'dimension', label: 'Dimension (D)' },
   { key: 'o', tool: 'ellipse', label: 'Ellipse (O)' },
   { key: 'l', tool: 'polyline', label: 'Polyline (L)' },
+  { key: 'u', tool: 'hyperlink', label: 'Hyperlink (U)' },
 ];
 
 export function getToolForKey(key: string): Tool | null {

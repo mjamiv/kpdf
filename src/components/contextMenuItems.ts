@@ -9,6 +9,14 @@ export type ContextMenuItem = {
   action: () => void;
 };
 
+const QUICK_SWITCH_TOOLS: { tool: Tool; label: string; shortcut: string }[] = [
+  { tool: 'select', label: 'Select', shortcut: 'V' },
+  { tool: 'pen', label: 'Pen', shortcut: 'P' },
+  { tool: 'rectangle', label: 'Rectangle', shortcut: 'R' },
+  { tool: 'highlight', label: 'Highlight', shortcut: 'H' },
+  { tool: 'text', label: 'Text', shortcut: 'T' },
+];
+
 export function buildCanvasMenuItems(
   annotation: Annotation | null,
   opts: {
@@ -20,6 +28,7 @@ export function buildCanvasMenuItems(
     onDeselect?: () => void;
     onSelectAll?: () => void;
     onPaste?: () => void;
+    onSwitchTool?: (tool: Tool) => void;
     tool: Tool;
   },
 ): ContextMenuItem[] {
@@ -38,6 +47,19 @@ export function buildCanvasMenuItems(
 
   if (opts.onDeselect && annotation) {
     items.push({ id: 'deselect', label: 'Deselect', shortcut: 'Esc', action: opts.onDeselect });
+  }
+
+  if (!annotation && opts.onSwitchTool) {
+    for (const qt of QUICK_SWITCH_TOOLS) {
+      if (qt.tool !== opts.tool) {
+        items.push({
+          id: `switch-${qt.tool}`,
+          label: `Switch to ${qt.label}`,
+          shortcut: qt.shortcut,
+          action: () => opts.onSwitchTool!(qt.tool),
+        });
+      }
+    }
   }
 
   return items;

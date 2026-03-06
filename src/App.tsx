@@ -16,13 +16,14 @@ import {
   saveAnnotationsToLocalStorage,
   toAnnotationsByPage,
 } from './annotationPersistence';
-import { exportPdf, type ExportPersistenceResult } from './pdfExport';
+import { exportPdf } from './pdfExport';
 import type { Annotation, AnnotationsByPage, AnchorPosition, PageScale, Point, Tool } from './types';
 import { annotationReducer, computeInverse, type DocumentState } from './engine/state';
 import type { Action } from './engine/actions';
 import { createUndoStack, type UndoStack } from './engine/history';
 import { clamp01, nextZIndex, randomId, sortedAnnotations } from './engine/utils';
-import { createSelectionState, deselectAll, selectAnnotation, type SelectionState } from './engine/selection';
+import { createSelectionState, deselectAll, selectAll, selectAnnotation, type SelectionState } from './engine/selection';
+import { moveAnnotation } from './engine/transforms';
 import { getTool } from './tools';
 import { getToolForKey } from './tools/shortcuts';
 import { drawAnnotations } from './rendering/drawAnnotations';
@@ -110,6 +111,12 @@ export default function App() {
   const tabDataRef = useRef<Map<string, TabData>>(new Map());
   const panXRef = useRef(0);
   const panYRef = useRef(0);
+  const renderedZoomRef = useRef(1);
+  const zoomDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const panVelocityRef = useRef<{ x: number; y: number; time: number }[]>([]);
+  const momentumRafRef = useRef<number | null>(null);
+  const activePointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchStateRef = useRef<{ initialDistance: number; initialZoom: number; midX: number; midY: number } | null>(null);
   const handleDragRef = useRef<{
     active: boolean;
     anchor: AnchorPosition;
@@ -145,6 +152,8 @@ export default function App() {
   // Phase 1 state
   const [pageScale, setPageScale] = useState<PageScale | null>(null);
   const [activeStampId, setActiveStampId] = useState('approved');
+  const [scrollZoomMode, setScrollZoomMode] = useState<boolean>(() => localStorage.getItem('kpdf-scroll-zoom') === 'true');
+  const clipboardRef = useRef<Annotation[]>([]);
 
   // Phase 3 state
   const [threads, setThreads] = useState<CommentThread[]>([]);
@@ -204,6 +213,11 @@ export default function App() {
   const setFitMode = useCallback((nextMode: FitMode) => {
     updateActiveTab((t) => ({ ...t, fitMode: nextMode }));
   }, [updateActiveTab]);
+
+  // Persist scroll-zoom preference
+  useEffect(() => {
+    localStorage.setItem('kpdf-scroll-zoom', scrollZoomMode ? 'true' : 'false');
+  }, [scrollZoomMode]);
 
   // Sync refs
   useEffect(() => { setPageInput(String(pageNumber || 1)); }, [pageNumber, activeTabId]);
@@ -269,6 +283,14 @@ export default function App() {
     requestAnimationFrame(() => { shell.scrollLeft = docX * scale - localX; shell.scrollTop = docY * scale - localY; });
   }, [fitMode, pdfDoc, setFitMode, setZoom, zoom]);
 
+  const debouncedRenderZoom = useCallback((nextZoom: number, anchor?: { clientX: number; clientY: number }) => {
+    if (zoomDebounceRef.current) clearTimeout(zoomDebounceRef.current);
+    zoomDebounceRef.current = setTimeout(() => {
+      applyZoom(nextZoom, anchor ? { anchor } : undefined);
+      zoomDebounceRef.current = null;
+    }, 200);
+  }, [applyZoom]);
+
   const zoomIn = useCallback(() => applyZoom(stepZoom(zoom, VIEWER_ZOOM_STEP)), [applyZoom, zoom]);
   const zoomOut = useCallback(() => applyZoom(stepZoom(zoom, -VIEWER_ZOOM_STEP)), [applyZoom, zoom]);
   const resetZoom = useCallback(() => applyZoom(1), [applyZoom]);
@@ -295,9 +317,9 @@ export default function App() {
   }, [applyZoom, pdfDoc, setPanPosition, zoom]);
 
   const applyCurrentFitMode = useCallback(() => {
-    if (fitMode === 'width') { fitToWidth(); return; }
-    if (fitMode === 'page') fitToPage();
-  }, [fitMode, fitToPage, fitToWidth]);
+    if (fitMode === 'width') fitToWidth();
+    else if (fitMode === 'page') fitToPage();
+  }, [fitMode, fitToWidth, fitToPage]);
 
   // Review mode
   const toggleReviewMode = useCallback(() => {
@@ -348,8 +370,8 @@ export default function App() {
   useEffect(() => {
     const overlay = overlayCanvasRef.current;
     if (!overlay) return;
-    drawAnnotations(overlay, currentAnnotations, draft, tool);
-  }, [currentAnnotations, draft, tool]);
+    drawAnnotations(overlay, currentAnnotations, draft, tool, selection.ids);
+  }, [currentAnnotations, draft, tool, selection.ids]);
 
   // Autosave to localStorage
   useEffect(() => {
@@ -384,7 +406,8 @@ export default function App() {
       activeRenderRef.current = renderTask;
       try { await renderTask.promise; } catch (e) { if ((e as Error).name !== 'RenderingCancelledException') throw e; }
       if (isCurrent) {
-        drawAnnotations(overlayCanvas, annotationsByPage[pageNumber] ?? [], draft, tool);
+        renderedZoomRef.current = zoom;
+        drawAnnotations(overlayCanvas, annotationsByPage[pageNumber] ?? [], draft, tool, selection.ids);
         setIsBusy(false);
         announceToScreenReader(`Page ${pageNumber} of ${pageCount}`);
       }
@@ -422,17 +445,43 @@ export default function App() {
   }), [dispatch, pageNumber, color, author, currentAnnotations, selection, setDraft]);
 
   const startPanDrag = useCallback((clientX: number, clientY: number) => {
+    if (momentumRafRef.current !== null) {
+      cancelAnimationFrame(momentumRafRef.current);
+      momentumRafRef.current = null;
+    }
+    panVelocityRef.current = [];
     panDragRef.current = { active: true, clientX, clientY, panX: panXRef.current, panY: panYRef.current };
     setIsPanDragging(true);
   }, []);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (!pdfDoc) return;
+
+    activePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    event.currentTarget.setPointerCapture(event.pointerId);
+
+    // Two pointers → begin pinch-to-zoom
+    if (activePointersRef.current.size === 2) {
+      event.preventDefault();
+      panDragRef.current.active = false;
+      setIsPanDragging(false);
+      setDraft(null);
+      const pts = Array.from(activePointersRef.current.values());
+      const dx = pts[1].x - pts[0].x;
+      const dy = pts[1].y - pts[0].y;
+      pinchStateRef.current = {
+        initialDistance: Math.sqrt(dx * dx + dy * dy) || 1,
+        initialZoom: zoom,
+        midX: (pts[0].x + pts[1].x) / 2,
+        midY: (pts[0].y + pts[1].y) / 2,
+      };
+      return;
+    }
+
     const panIntent = panMode || spacePanActive || event.button === 1;
     if (panIntent) {
       event.preventDefault();
       startPanDrag(event.clientX, event.clientY);
-      event.currentTarget.setPointerCapture(event.pointerId);
       return;
     }
     const activeTool = getTool(tool);
@@ -440,12 +489,43 @@ export default function App() {
     activeTool.onPointerDown(makeToolCtx(), { point: toNormalizedPoint(event), shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey });
   };
 
+  const updatePanFromPointer = useCallback((clientX: number, clientY: number) => {
+    const { clientX: startX, clientY: startY, panX, panY } = panDragRef.current;
+    setPanPosition({ x: panX + clientX - startX, y: panY + clientY - startY });
+  }, []);
+
   const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (!pdfDoc) return;
+
+    // Multi-pointer (pinch) handling
+    if (activePointersRef.current.has(event.pointerId)) {
+      activePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (activePointersRef.current.size === 2 && pinchStateRef.current) {
+        const pts = Array.from(activePointersRef.current.values());
+        const dx = pts[1].x - pts[0].x;
+        const dy = pts[1].y - pts[0].y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const midX = (pts[0].x + pts[1].x) / 2;
+        const midY = (pts[0].y + pts[1].y) / 2;
+        const ratio = dist / pinchStateRef.current.initialDistance;
+        const nextZoom = clampZoom(pinchStateRef.current.initialZoom * ratio);
+        setZoom(nextZoom);
+        setFitMode('manual');
+        const panDx = midX - pinchStateRef.current.midX;
+        const panDy = midY - pinchStateRef.current.midY;
+        setPanPosition((prev) => ({ x: prev.x + panDx, y: prev.y + panDy }));
+        pinchStateRef.current.midX = midX;
+        pinchStateRef.current.midY = midY;
+        debouncedRenderZoom(nextZoom, { clientX: midX, clientY: midY });
+        return;
+      }
+    }
+
     if (panDragRef.current.active) {
-      const dx = event.clientX - panDragRef.current.clientX;
-      const dy = event.clientY - panDragRef.current.clientY;
-      setPanPosition({ x: panDragRef.current.panX + dx, y: panDragRef.current.panY + dy });
+      const samples = panVelocityRef.current;
+      samples.push({ x: event.clientX, y: event.clientY, time: Date.now() });
+      if (samples.length > 5) samples.splice(0, samples.length - 5);
+      updatePanFromPointer(event.clientX, event.clientY);
       return;
     }
     const activeTool = getTool(tool);
@@ -455,10 +535,48 @@ export default function App() {
 
   const handlePointerUp = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (!pdfDoc) return;
+
+    activePointersRef.current.delete(event.pointerId);
+    try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* no-op */ }
+
+    if (pinchStateRef.current) {
+      if (activePointersRef.current.size < 2) {
+        pinchStateRef.current = null;
+      }
+      return;
+    }
+
     if (panDragRef.current.active) {
       panDragRef.current.active = false;
       setIsPanDragging(false);
-      try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* no-op */ }
+
+      // Compute momentum velocity from recent samples
+      const samples = panVelocityRef.current;
+      if (samples.length >= 2) {
+        const last = samples[samples.length - 1];
+        const first = samples[0];
+        const dt = last.time - first.time;
+        if (dt > 0 && dt < 300) {
+          let vx = (last.x - first.x) / dt * 16;
+          let vy = (last.y - first.y) / dt * 16;
+          const mag = Math.sqrt(vx * vx + vy * vy);
+          if (mag > 0.5) {
+            const friction = 0.92;
+            const tick = () => {
+              vx *= friction;
+              vy *= friction;
+              if (Math.sqrt(vx * vx + vy * vy) < 0.5) {
+                momentumRafRef.current = null;
+                return;
+              }
+              setPanPosition((prev) => ({ x: prev.x + vx, y: prev.y + vy }));
+              momentumRafRef.current = requestAnimationFrame(tick);
+            };
+            momentumRafRef.current = requestAnimationFrame(tick);
+          }
+        }
+      }
+      panVelocityRef.current = [];
       return;
     }
     const activeTool = getTool(tool);
@@ -478,9 +596,10 @@ export default function App() {
 
   const handleShellPointerMove = (event: React.PointerEvent<HTMLElement>) => {
     if (!panDragRef.current.active) return;
-    const dx = event.clientX - panDragRef.current.clientX;
-    const dy = event.clientY - panDragRef.current.clientY;
-    setPanPosition({ x: panDragRef.current.panX + dx, y: panDragRef.current.panY + dy });
+    const samples = panVelocityRef.current;
+    samples.push({ x: event.clientX, y: event.clientY, time: Date.now() });
+    if (samples.length > 5) samples.splice(0, samples.length - 5);
+    updatePanFromPointer(event.clientX, event.clientY);
   };
 
   const handleShellPointerUp = (event: React.PointerEvent<HTMLElement>) => {
@@ -488,6 +607,33 @@ export default function App() {
     panDragRef.current.active = false;
     setIsPanDragging(false);
     try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* no-op */ }
+
+    const samples = panVelocityRef.current;
+    if (samples.length >= 2) {
+      const last = samples[samples.length - 1];
+      const first = samples[0];
+      const dt = last.time - first.time;
+      if (dt > 0 && dt < 300) {
+        let vx = (last.x - first.x) / dt * 16;
+        let vy = (last.y - first.y) / dt * 16;
+        const mag = Math.sqrt(vx * vx + vy * vy);
+        if (mag > 0.5) {
+          const friction = 0.92;
+          const tick = () => {
+            vx *= friction;
+            vy *= friction;
+            if (Math.sqrt(vx * vx + vy * vy) < 0.5) {
+              momentumRafRef.current = null;
+              return;
+            }
+            setPanPosition((prev) => ({ x: prev.x + vx, y: prev.y + vy }));
+            momentumRafRef.current = requestAnimationFrame(tick);
+          };
+          momentumRafRef.current = requestAnimationFrame(tick);
+        }
+      }
+    }
+    panVelocityRef.current = [];
   };
 
   // Keyboard shortcuts
@@ -540,6 +686,74 @@ export default function App() {
       if (e.key === ']' && selection.ids.size > 0) { e.preventDefault(); for (const id of selection.ids) dispatch({ type: 'SET_Z_ORDER', page: pageNumber, id, op: 'up' }); return; }
       if (e.key === '?') { panelState.toggleShortcuts(); return; }
 
+      // Escape: tool → select, selection → deselect
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (tool !== 'select') {
+          setTool('select'); setLockedTool(null); setDraft(null); setPanMode(false);
+          announceToScreenReader('Tool: select');
+        } else if (selection.ids.size > 0) {
+          setSelection(deselectAll());
+          announceToScreenReader('Deselected');
+        }
+        return;
+      }
+
+      // Arrow-key nudge
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && selection.ids.size > 0) {
+        e.preventDefault();
+        const step = e.shiftKey ? 0.01 : 0.001;
+        const dx = e.key === 'ArrowRight' ? step : e.key === 'ArrowLeft' ? -step : 0;
+        const dy = e.key === 'ArrowDown' ? step : e.key === 'ArrowUp' ? -step : 0;
+        for (const id of selection.ids) {
+          dispatch({ type: 'MOVE_ANNOTATION', page: pageNumber, id, dx, dy }, `nudge-${id}`);
+        }
+        return;
+      }
+
+      // Cmd+A: Select all
+      if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+        e.preventDefault();
+        setTool('select'); setDraft(null);
+        setSelection(selectAll(currentAnnotations));
+        announceToScreenReader(`Selected ${currentAnnotations.filter(a => !a.locked).length} annotations`);
+        return;
+      }
+
+      // Cmd+C: Copy
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c' && selection.ids.size > 0) {
+        e.preventDefault();
+        clipboardRef.current = currentAnnotations.filter(a => selection.ids.has(a.id));
+        announceToScreenReader(`Copied ${clipboardRef.current.length} annotation${clipboardRef.current.length > 1 ? 's' : ''}`);
+        return;
+      }
+
+      // Cmd+V: Paste
+      if ((e.ctrlKey || e.metaKey) && e.key === 'v' && clipboardRef.current.length > 0) {
+        e.preventDefault();
+        const offset = 0.02;
+        const newIds: string[] = [];
+        for (const ann of clipboardRef.current) {
+          const id = randomId();
+          newIds.push(id);
+          const moved = moveAnnotation(ann, offset, offset);
+          dispatch({ type: 'ADD_ANNOTATION', page: pageNumber, annotation: { ...moved, id, zIndex: nextZIndex(currentAnnotations) } });
+        }
+        return;
+      }
+
+      // Cmd+D: Duplicate in-place
+      if ((e.ctrlKey || e.metaKey) && e.key === 'd' && selection.ids.size > 0) {
+        e.preventDefault();
+        const selected = currentAnnotations.filter(a => selection.ids.has(a.id));
+        for (const ann of selected) {
+          const id = randomId();
+          const moved = moveAnnotation(ann, 0.015, 0.015);
+          dispatch({ type: 'ADD_ANNOTATION', page: pageNumber, annotation: { ...moved, id, zIndex: nextZIndex(currentAnnotations) } });
+        }
+        return;
+      }
+
       const newTool = getToolForKey(e.key);
       if (newTool && isToolAllowed(newTool, reviewState)) {
         setPanMode(false); setLockedTool(null); setTool(newTool); setDraft(null);
@@ -588,8 +802,13 @@ export default function App() {
       const canvas = overlayCanvasRef.current;
       if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
-      const dx = (ev.clientX - handleDragRef.current.startClientX) / rect.width;
-      const dy = (ev.clientY - handleDragRef.current.startClientY) / rect.height;
+      let dx = (ev.clientX - handleDragRef.current.startClientX) / rect.width;
+      let dy = (ev.clientY - handleDragRef.current.startClientY) / rect.height;
+      if (ev.shiftKey) {
+        const max = Math.max(Math.abs(dx), Math.abs(dy));
+        dx = max * Math.sign(dx || 1);
+        dy = max * Math.sign(dy || 1);
+      }
       if (Math.abs(dx) > 0.001 || Math.abs(dy) > 0.001) {
         dispatch(
           { type: 'RESIZE_ANNOTATION', page: pageNumber, id: handleDragRef.current.annotationId, anchor: handleDragRef.current.anchor, dx, dy },
@@ -763,13 +982,13 @@ export default function App() {
       URL.revokeObjectURL(url);
       downloadSidecar(safeName, payload);
       if (documentFingerprint) saveAnnotationsToLocalStorage(documentFingerprint, payload);
-      const msg = (p: ExportPersistenceResult) => {
-        if (flattenOnSave) return 'Saved flattened PDF + sidecar JSON.';
-        if (p.mode === 'attachment') return 'Saved editable PDF (embedded attachment) + sidecar JSON.';
-        if (p.mode === 'sidecar-only') return `Saved PDF + sidecar. Payload ${p.payloadBytes}B > ${p.thresholdBytes}B threshold.`;
-        return 'Saved editable PDF + sidecar JSON.';
-      };
-      setStatus(msg(output.persistence));
+      const p = output.persistence;
+      let saveMsg: string;
+      if (flattenOnSave) saveMsg = 'Saved flattened PDF + sidecar JSON.';
+      else if (p.mode === 'attachment') saveMsg = 'Saved editable PDF (embedded attachment) + sidecar JSON.';
+      else if (p.mode === 'sidecar-only') saveMsg = `Saved PDF + sidecar. Payload ${p.payloadBytes}B > ${p.thresholdBytes}B threshold.`;
+      else saveMsg = 'Saved editable PDF + sidecar JSON.';
+      setStatus(saveMsg);
       setTabs((prev) => prev.map((t) => t.id === activeTabId ? { ...t, dirty: false } : t));
       setIsBusy(false);
     } catch (e) { setStatus(`Save error: ${(e as Error).message}`); setIsBusy(false); }
@@ -835,11 +1054,17 @@ export default function App() {
   }, [activateTool, reviewState]);
 
   const handleCanvasWheel = useCallback((event: React.WheelEvent<HTMLElement>) => {
-    if (!pdfDoc || !event.ctrlKey) return;
+    if (!pdfDoc) return;
+    const wantsZoom = event.ctrlKey || event.metaKey || scrollZoomMode;
+    if (!wantsZoom) return;
     event.preventDefault();
-    const delta = event.deltaY < 0 ? VIEWER_ZOOM_STEP : -VIEWER_ZOOM_STEP;
-    applyZoom(stepZoom(zoom, delta), { anchor: { clientX: event.clientX, clientY: event.clientY } });
-  }, [applyZoom, pdfDoc, zoom]);
+    const factor = event.deltaY < 0 ? 1.04 : 1 / 1.04;
+    const nextZoom = clampZoom(zoom * factor);
+    if (Math.abs(nextZoom - zoom) < 0.001) return;
+    setZoom(nextZoom);
+    setFitMode('manual');
+    debouncedRenderZoom(nextZoom, { clientX: event.clientX, clientY: event.clientY });
+  }, [pdfDoc, scrollZoomMode, zoom, setZoom, setFitMode, debouncedRenderZoom]);
 
   const commitPageInput = useCallback(() => {
     const parsed = Number.parseInt(pageInput, 10);
@@ -925,6 +1150,25 @@ export default function App() {
         handleDeleteAnnotations(toDelete);
       } : undefined,
       onDeselect: selIds.length > 0 ? () => setSelection(deselectAll()) : undefined,
+      onSelectAll: () => { setTool('select'); setDraft(null); setSelection(selectAll(currentAnnotations)); },
+      onCopy: selIds.length > 0 ? () => {
+        clipboardRef.current = currentAnnotations.filter(a => selection.ids.has(a.id));
+        setStatus(`Copied ${clipboardRef.current.length} annotation(s).`);
+      } : undefined,
+      onPaste: clipboardRef.current.length > 0 ? () => {
+        for (const ann of clipboardRef.current) {
+          const id = randomId();
+          const moved = moveAnnotation(ann, 0.02, 0.02);
+          dispatch({ type: 'ADD_ANNOTATION', page: pageNumber, annotation: { ...moved, id, zIndex: nextZIndex(currentAnnotations) } });
+        }
+      } : undefined,
+      onBringToFront: selIds.length > 0 ? () => {
+        for (const id of selIds) dispatch({ type: 'SET_Z_ORDER', page: pageNumber, id, op: 'up' });
+      } : undefined,
+      onSendToBack: selIds.length > 0 ? () => {
+        for (const id of selIds) dispatch({ type: 'SET_Z_ORDER', page: pageNumber, id, op: 'down' });
+      } : undefined,
+      onSwitchTool: (t: Tool) => { activateTool(t); },
     });
     if (items.length > 0) setContextMenu({ x: e.clientX, y: e.clientY, items });
   }, [selection, currentAnnotations, tool, pageNumber, handleDeleteAnnotations]);
@@ -944,25 +1188,6 @@ export default function App() {
     setStatus('Group suggestion noted.');
   }, []);
 
-  // Navigation callbacks
-  const handleNavBack = useCallback(() => {
-    navHistory.goBack();
-    const page = navHistory.history[navHistory.currentIndex - 1];
-    if (page) setPageNumber(page);
-  }, [navHistory, setPageNumber]);
-
-  const handleNavForward = useCallback(() => {
-    navHistory.goForward();
-    const page = navHistory.history[navHistory.currentIndex + 1];
-    if (page) setPageNumber(page);
-  }, [navHistory, setPageNumber]);
-
-  const handleNavJump = useCallback((idx: number) => {
-    navHistory.jumpTo(idx);
-    const page = navHistory.history[idx];
-    if (page) setPageNumber(page);
-  }, [navHistory, setPageNumber]);
-
   // Page nav callbacks for toolbar
   const handlePageNav = useCallback((page: number) => {
     setDraft(null);
@@ -972,6 +1197,7 @@ export default function App() {
   // Command registry
   const commands = useCommandRegistry({
     setTool: activateTool,
+    setLockedTool: (t) => { if (t) { activateTool(t); setLockedTool(t); setStatus(`${t} locked.`); } else { setLockedTool(null); } },
     undo: handleUndo,
     redo: handleRedo,
     canUndo: true,
@@ -994,6 +1220,7 @@ export default function App() {
     clearPage: pdfDoc ? clearPage : undefined,
     toggleReview: toggleReviewMode,
     toggleFlatten: () => setFlattenOnSave((v) => !v),
+    toggleScrollZoom: () => setScrollZoomMode((v) => !v),
     importSidecar: () => sidecarInputRef.current?.click(),
     importXfdf: () => xfdfInputRef.current?.click(),
     exportXfdf: pdfDoc ? handleExportXfdf : undefined,
@@ -1001,10 +1228,7 @@ export default function App() {
     toggleToolPresets: panelState.toggleToolPresets,
   });
 
-  // Keep nav history handlers referenced to suppress unused warnings
-  void handleNavBack; void handleNavForward; void handleNavJump;
-
-  const overlayCursor = isPanDragging ? 'grabbing' : (panMode || spacePanActive ? 'grab' : (getTool(tool)?.cursor ?? 'crosshair'));
+  const overlayCursor = isPanDragging ? 'grabbing' : panMode || spacePanActive ? 'grab' : (getTool(tool)?.cursor ?? 'crosshair');
 
   return (
     <div className={`app${isDragOver ? ' drag-over' : ''}`} onDrop={handleDrop} onDragOver={(e) => e.preventDefault()} onDragEnter={handleDragEnter} onDragLeave={handleDragLeave}>
@@ -1123,7 +1347,7 @@ export default function App() {
               </div>
             </div>
           ) : (
-            <div className="page-wrap" style={{ transform: `translate(${panX}px, ${panY}px)` }}>
+            <div className="page-wrap" style={{ transform: `translate(${panX}px, ${panY}px) scale(${renderedZoomRef.current > 0 ? zoom / renderedZoomRef.current : 1})` }}>
               <canvas ref={pdfCanvasRef} className="pdf-canvas" />
               <canvas ref={overlayCanvasRef} className="overlay-canvas" style={{ cursor: overlayCursor }}
                 onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerLeave={handlePointerUp} />

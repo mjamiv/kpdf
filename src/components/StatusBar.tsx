@@ -11,7 +11,7 @@ export default function StatusBar({ status, tool, lockedTool }: StatusBarProps) 
     <footer className="status-line" role="status" aria-live="polite">
       <span>{status}</span>
       <span className="status-spacer" />
-      {tool && tool !== 'select' && (
+      {tool && (
         <span className="status-tool">{tool}{lockedTool ? ' (locked)' : ''}</span>
       )}
       <span className="status-hint">Cmd+K</span>

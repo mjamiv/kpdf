@@ -40,6 +40,49 @@ kpdf is a React + Vite + TypeScript PDF markup tool using `pdfjs-dist` for rende
 - Single `overlay` field in usePanelState ensures only one modal/popover open at a time
 - Handle resize uses window-level pointer events (not canvas) since handles are in a separate DOM layer
 
+### Red Team UX Overhaul (SOTA Viewer + Manipulation)
+4-phase overhaul to make the viewer and manipulation layer production-grade.
+
+**Phase 1 — Fluid Viewer**:
+- Smooth animated zoom with CSS `scale()` interpolation + debounced re-render (range: 0.1x-8x)
+- Inertial pan with momentum (velocity tracking, rAF friction at 0.92)
+- Pinch-to-zoom and two-finger pan via multi-pointer tracking
+- Scroll-to-zoom preference (toggle via Cmd+K, persisted to localStorage)
+
+**Phase 2 — Live Manipulation**:
+- Live drag preview: annotations follow cursor during move (offset in drawAnnotations)
+- Marquee rubber-band selection in selectTool (new MarqueeDraft type)
+- Hover highlight: module-level `currentHoveredId` in selectTool, drawn in drawAnnotations
+- Resize handle hover states (grow + glow via onPointerEnter/Leave)
+- Shift-constrain proportional resize
+- Snap guide rendering infrastructure (orange dashed lines)
+- Arrow-key nudge (0.001 step, 0.01 with Shift)
+- Copy/Paste/Duplicate (Cmd+C/V/D) with clipboard ref
+- Select All (Cmd+A) via new `selectAll()` helper in selection.ts
+
+**Phase 3 — Tool Switching**:
+- All tool groups expanded by default, collapse state persisted in localStorage
+- Lock icon + right-click to lock/unlock tools on ToolRail
+- Quick tool switcher in canvas context menu (5 common tools via `onSwitchTool`)
+- Lock variant in Cmd+K command palette (`setLockedTool` in CommandRegistryOptions)
+- Hyperlink tool shortcut: `U`
+- Escape key flow: tool->select, selection->deselect
+
+**Phase 4 — Polish**:
+- Custom SVG data-URI cursors for pen, stamp, cloud, measurement/AEC tools
+- Status bar always shows tool name (including select)
+
+## Key Decisions and Tradeoffs
+- Kept annotation commit logic in `dispatch` so tool auto-fallback to Select happens centrally
+- Persisted `fitMode` and `panX/panY` on DocumentTab for per-tab viewer context
+- Transform-based free pan for full operator control
+- Single `overlay` field in usePanelState ensures only one modal/popover open at a time
+- Handle resize uses window-level pointer events (not canvas) since handles are in a separate DOM layer
+- Live drag preview uses draw-time offset (not state mutation) to avoid undo pollution
+- Hover detection uses module-level export (`currentHoveredId`) to avoid ToolContext changes
+- Marquee selection uses a separate `MarqueeDraft` type alongside `SelectDraft` in selectTool
+- Proportional zoom uses multiplicative factor (1.04x) instead of fixed step for smooth trackpad input
+
 ## Current State
 - Dev server: `npm run dev`
 - Lint: passing
@@ -47,7 +90,7 @@ kpdf is a React + Vite + TypeScript PDF markup tool using `pdfjs-dist` for rende
 - Build: passing (`npm run build`)
 
 ## Next Best Steps
-1. Multi-select resize (currently only single-annotation)
-2. Rotate handle on selection
-3. Performance pass: bundle splitting, first-render profiling
-4. Real E2E with Playwright runner (current tests written but not run in CI)
+1. Performance pass: bundle splitting, first-render profiling
+2. Real E2E with Playwright runner (current tests written but not run in CI)
+3. Rotation handle on selection (plumbing exists but UI not wired)
+4. Multi-page virtual scroll with scroll-snap

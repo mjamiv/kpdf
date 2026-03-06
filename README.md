@@ -20,7 +20,7 @@ Access app live at: https://mjamiv.github.io/kpdf/
 - **Left sidebar**: Unified "Document" view with collapsible Sheets and Pages sections
 - **Right panel**: 3-tab interface — Activity (comments + punch list), Markups, AI Assist
 - **Canvas**: Drop zone empty state with keyboard shortcut hints, drag overlay for PDF drop
-- **Context menu**: Right-click on canvas for quick annotation actions (delete, deselect)
+- **Context menu**: Right-click on canvas for annotation actions (copy, paste, delete, z-order, deselect, quick tool switch)
 - **Tooltips**: Delayed hover tooltips with keyboard shortcut badges on all TopBar and ToolRail buttons
 - **Loading indicator**: Animated progress bar during PDF operations
 - **Command palette**: Fuzzy-search commands via Cmd+K / Ctrl+K (includes migrated toolbar actions)
@@ -29,25 +29,40 @@ Access app live at: https://mjamiv.github.io/kpdf/
 - **Responsive**: Compact tool rail at 980px, overlay sidebars at 768px
 
 ### Viewer Controls
+- **Smooth zoom**: CSS transform interpolation with debounced high-res re-render (0.1x-8x range)
+- **Proportional trackpad zoom**: continuous zoom from trackpad pinch gestures
+- **Pinch-to-zoom**: two-finger pinch and pan on touch devices
+- **Inertial pan**: momentum-based panning with friction decay after release
 - Keyboard zoom: **Ctrl/Cmd +**, **Ctrl/Cmd -**, **Ctrl/Cmd 0**
-- Mouse zoom: **Ctrl/Cmd + wheel** (anchor-aware zoom)
+- Mouse zoom: **Ctrl/Cmd + wheel** (anchor-aware). Optional scroll-to-zoom mode (toggle via Cmd+K)
 - Fit modes: **Fit Width**, **Fit Page**, plus fixed zoom presets
-- Pan: toggle **Pan** mode (`H`) or hold **Space** for temporary pan
+- Pan: toggle **Pan** mode (`H`), hold **Space**, or middle-click drag
 - Page navigation with back/forward history breadcrumbs
 
 ### Tool Interaction Model
 - Default behavior returns to **Select** after creating an annotation
-- Double-click a tool to **lock** it for repeated use
-- Shift-key constraints (45° angles, squares, circles)
+- **Tool lock**: double-click or right-click a tool to lock it for repeated use (lock icon shown)
+- **Lock via Cmd+K**: command palette offers "Tool: [Name] (Lock)" variants
+- **Quick tool switching**: right-click canvas shows "Switch to..." menu for 5 common tools
+- **All groups expanded** by default (collapse state persisted)
+- **Escape key**: revert to Select tool, then deselect on second press
+- Shift-key constraints (45° angles, squares, proportional resize)
 - Tool presets for discipline-specific workflows (Electrical, Structural, Plumbing, etc.)
 - Scale calibration for real-world measurement annotations
+- **Custom cursors**: tool-specific SVG cursors (pen, stamp, cloud, measurement)
 
 ### Engine
 - Reducer-based state with full undo/redo (200-deep, coalesced drag actions)
 - Hit-testing for all annotation types (point-in-polygon, distance-to-segment)
-- Selection system with multi-select (shift+click), locked annotation filtering
-- Transform operations: move, resize, rotate, z-order (front/back/up/down)
-- Snapping/alignment guides with configurable tolerance
+- **Live drag preview**: annotations follow the cursor in real-time during move
+- **Marquee selection**: drag on empty space to rubber-band select multiple annotations
+- **Hover highlight**: annotations glow on hover with cursor feedback
+- Selection system with multi-select (shift+click, marquee, Cmd+A), locked annotation filtering
+- **Clipboard**: Copy (Cmd+C), Paste (Cmd+V), Duplicate (Cmd+D)
+- **Arrow-key nudge**: 1px (or 10px with Shift) for precise positioning
+- Transform operations: move, resize (with Shift-proportional), rotate, z-order
+- **Resize handle hover states**: handles grow and glow on hover
+- Snapping/alignment guides with visual guide lines during move/resize
 
 ### Persistence (3-tier)
 - **Embedded**: PDF attachment (`kpdf-annotations-v2.json`) for portable editable files
@@ -166,13 +181,15 @@ src/
 | T | Text | A | Arrow | C | Callout | K | Cloud |
 | M | Measurement | G | Polygon | S | Stamp | E | Area |
 | N | Angle | X | Count | D | Dimension | O | Ellipse |
-| L | Polyline | Cmd+K | Command palette |
+| L | Polyline | U | Hyperlink |
+| Cmd+K | Command palette | Cmd+A | Select all |
+| Cmd+C / V / D | Copy / Paste / Duplicate |
 | Ctrl+Z / Ctrl+Shift+Z | Undo / Redo |
+| Arrows | Nudge (Shift = 10x) | Esc | Tool->Select / Deselect |
 | Delete | Remove selected | [ / ] | Z-order |
 | ? | Show shortcuts | Space (hold) | Pan |
 
 ## Known Limitations
 - Bundle size is large due to pdf.js worker (~1.2MB)
-- Selection handle drag-resize works for single-annotation selection; multi-select resize is visual only
 - Collaboration features are local-only (no WebSocket server yet)
 - AI features use local heuristics (no cloud AI provider integrated yet)

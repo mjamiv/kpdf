@@ -52,7 +52,7 @@ function renderStrokeOutline(
 const penTool: ToolBehavior = {
   name: 'pen',
   label: 'Pen',
-  cursor: 'crosshair',
+  cursor: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23366096' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z'/%3E%3C/svg%3E") 2 22, crosshair`,
 
   onPointerDown(ctx: ToolContext, e: NormalizedPointerEvent) {
     ctx.setDraft({ toolType: 'pen', points: [e.point], color: ctx.color } as PenDraft);

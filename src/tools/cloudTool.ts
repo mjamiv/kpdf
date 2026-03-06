@@ -16,7 +16,7 @@ export function isCloudDraft(draft: unknown): draft is CloudDraft {
 const cloudTool: ToolBehavior = {
   name: 'cloud',
   label: 'Cloud',
-  cursor: 'crosshair',
+  cursor: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%235b5fc7' stroke-width='2'%3E%3Cpath d='M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z'/%3E%3C/svg%3E") 12 12, crosshair`,
 
   onPointerDown(ctx: ToolContext, e: NormalizedPointerEvent) {
     ctx.setDraft({ toolType: 'cloud', start: e.point, end: e.point } as CloudDraft);

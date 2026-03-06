@@ -1,10 +1,21 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Tool } from '../types';
 import { TOOL_SHORTCUTS } from '../tools/shortcuts';
 import { isToolAllowed, type ReviewState } from '../workflow/reviewMode';
 import { getToolAriaLabel } from '../utils/accessibility';
 import ToolIcon from './ToolIcon';
 import Tooltip from './Tooltip';
+
+const COLLAPSED_STORAGE_KEY = 'kpdf-tool-groups-collapsed';
+
+function loadCollapsedState(): Record<string, boolean> {
+  try {
+    const saved = localStorage.getItem(COLLAPSED_STORAGE_KEY);
+    return saved ? JSON.parse(saved) : {};
+  } catch {
+    return {};
+  }
+}
 
 type ToolRailProps = {
   tool: Tool;
@@ -39,7 +50,13 @@ const toolLabel = (t: Tool) => TOOL_SHORTCUTS.find((s) => s.tool === t)?.label ?
 
 export default function ToolRail(props: ToolRailProps) {
   const { tool, lockedTool, reviewState, pdfLoaded, panMode, color, onToolClick, onToolDoubleClick, onTogglePan, onSetColor, onToggleShortcuts } = props;
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({ shapes: true, aec: true, stamp: true });
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(loadCollapsedState);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(COLLAPSED_STORAGE_KEY, JSON.stringify(collapsed));
+    } catch { /* quota exceeded -- ignore */ }
+  }, [collapsed]);
 
   const toggleGroup = (id: string) => {
     setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -75,10 +92,17 @@ export default function ToolRail(props: ToolRailProps) {
                   className={`rail-btn${tool === id ? ' active' : ''}${lockedTool === id ? ' locked' : ''}`}
                   onClick={(e) => { if (e.detail === 1) onToolClick(id); }}
                   onDoubleClick={(e) => { e.preventDefault(); onToolDoubleClick(id); }}
+                  onContextMenu={(e) => { e.preventDefault(); onToolDoubleClick(id); }}
                   disabled={!pdfLoaded || !isToolAllowed(id, reviewState)}
                   aria-label={getToolAriaLabel(id)}
                 >
                   <ToolIcon tool={id} size={18} />
+                  {lockedTool === id && (
+                    <svg className="rail-lock-icon" width="10" height="10" viewBox="0 0 10 10" fill="currentColor" aria-hidden="true">
+                      <rect x="2" y="5" width="6" height="4" rx="1" />
+                      <path d="M3 5V3.5a2 2 0 0 1 4 0V5" fill="none" stroke="currentColor" strokeWidth="1.2" />
+                    </svg>
+                  )}
                 </button>
               </Tooltip>
             ))}

@@ -35,7 +35,7 @@ export function preloadStampImage(url: string): void {
 const stampTool: ToolBehavior = {
   name: 'stamp',
   label: 'Stamp',
-  cursor: 'copy',
+  cursor: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%235b5fc7' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M5 22h14M5 18h14v4H5zM7 18l-1-4h12l-1 4M12 14V8M8 8h8l-2-4H10z'/%3E%3C/svg%3E") 12 22, crosshair`,
 
   onPointerDown(ctx: ToolContext, e: NormalizedPointerEvent) {
     const stamp = activeStamp;

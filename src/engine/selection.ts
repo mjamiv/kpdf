@@ -25,6 +25,20 @@ export function toggleAnnotation(state: SelectionState, id: string, annotations:
   return { ...state, ids };
 }
 
+export function selectMultiple(state: SelectionState, ids: string[], annotations: Annotation[]): SelectionState {
+  const validIds = ids.filter((id) => {
+    const ann = annotations.find((a) => a.id === id);
+    return ann && !ann.locked;
+  });
+  if (validIds.length === 0) return state;
+  return { ...state, ids: new Set(validIds) };
+}
+
+export function selectAll(annotations: Annotation[]): SelectionState {
+  const ids = annotations.filter((a) => !a.locked).map((a) => a.id);
+  return { ids: new Set(ids), activeHandle: null, dragOrigin: null };
+}
+
 export function deselectAll(): SelectionState {
   return createSelectionState();
 }

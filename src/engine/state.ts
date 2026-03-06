@@ -102,30 +102,19 @@ export function annotationReducer(state: DocumentState, action: Action): Documen
             page.map((a) => (a.id === action.id ? { ...a, zIndex: minZ - 1 } as Annotation : a)),
           );
         }
-        case 'up': {
-          const idx = sorted.findIndex((a) => a.id === action.id);
-          if (idx < 0 || idx >= sorted.length - 1) return state;
-          const above = sorted[idx + 1];
-          return setPage(
-            state,
-            action.page,
-            page.map((a) => {
-              if (a.id === action.id) return { ...a, zIndex: above.zIndex } as Annotation;
-              if (a.id === above.id) return { ...a, zIndex: target.zIndex } as Annotation;
-              return a;
-            }),
-          );
-        }
+        case 'up':
         case 'down': {
+          const step = action.op === 'up' ? 1 : -1;
           const idx = sorted.findIndex((a) => a.id === action.id);
-          if (idx <= 0) return state;
-          const below = sorted[idx - 1];
+          const neighborIdx = idx + step;
+          if (idx < 0 || neighborIdx < 0 || neighborIdx >= sorted.length) return state;
+          const neighbor = sorted[neighborIdx];
           return setPage(
             state,
             action.page,
             page.map((a) => {
-              if (a.id === action.id) return { ...a, zIndex: below.zIndex } as Annotation;
-              if (a.id === below.id) return { ...a, zIndex: target.zIndex } as Annotation;
+              if (a.id === action.id) return { ...a, zIndex: neighbor.zIndex } as Annotation;
+              if (a.id === neighbor.id) return { ...a, zIndex: target.zIndex } as Annotation;
               return a;
             }),
           );

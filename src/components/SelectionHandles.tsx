@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Annotation, AnchorPosition } from '../types';
 import type { SelectionState } from '../engine/selection';
 import { boundingBox } from '../engine/hitTest';
@@ -10,8 +11,6 @@ type SelectionHandlesProps = {
   canvasRect: DOMRect | null;
   onHandleDown: (anchor: AnchorPosition, e: React.PointerEvent) => void;
 };
-
-const HANDLE_SIZE = 8;
 
 const anchorCursors: Record<AnchorPosition, string> = {
   nw: 'nwse-resize',
@@ -32,6 +31,8 @@ export default function SelectionHandles({
   canvasRect,
   onHandleDown,
 }: SelectionHandlesProps) {
+  const [hoveredHandle, setHoveredHandle] = useState<AnchorPosition | null>(null);
+
   if (selection.ids.size === 0 || !canvasRect) return null;
 
   const selected = annotations.filter((a) => selection.ids.has(a.id));
@@ -66,34 +67,27 @@ export default function SelectionHandles({
 
   return (
     <div className="selection-handles" style={{ position: 'absolute', left: 0, top: 0, width: canvasWidth, height: canvasHeight, pointerEvents: 'none' }}>
-      {/* Selection border */}
-      <div style={{
-        position: 'absolute',
-        left: left - 1,
-        top: top - 1,
-        width: width + 2,
-        height: height + 2,
-        border: '1.5px dashed #3b82f6',
-        pointerEvents: 'none',
-      }} />
-
-      {/* Resize handles */}
+      <div className="selection-handles-border" style={{ left: left - 1, top: top - 1, width: width + 2, height: height + 2 }} />
       {handles.map(({ anchor, x, y }) => (
         <div
           key={anchor}
+          className="selection-handle"
           style={{
-            position: 'absolute',
-            left: x - HANDLE_SIZE / 2,
-            top: y - HANDLE_SIZE / 2,
-            width: HANDLE_SIZE,
-            height: HANDLE_SIZE,
-            background: '#ffffff',
-            border: '1.5px solid #3b82f6',
-            borderRadius: '2px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+            left: x,
+            top: y,
             cursor: anchorCursors[anchor],
-            pointerEvents: 'auto',
+            ...(hoveredHandle === anchor ? {
+              width: 10,
+              height: 10,
+              marginLeft: -5,
+              marginTop: -5,
+              borderColor: 'var(--kpdf-info)',
+              boxShadow: '0 0 6px var(--accent-glow)',
+              background: 'var(--kpdf-paper-elevated)',
+            } : {}),
           }}
+          onPointerEnter={() => setHoveredHandle(anchor)}
+          onPointerLeave={() => setHoveredHandle(null)}
           onPointerDown={(e) => {
             e.stopPropagation();
             onHandleDown(anchor, e);

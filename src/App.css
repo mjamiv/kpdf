@@ -681,8 +681,13 @@ select:focus-visible,
     100% 100%;
 }
 
+.canvas-shell {
+  touch-action: pan-x pan-y;
+}
+
 .canvas-shell.pan-ready {
   cursor: grab;
+  touch-action: none;
 }
 
 .canvas-shell.panning {
@@ -702,6 +707,8 @@ select:focus-visible,
     0 8px 24px rgba(0, 0, 0, 0.45),
     0 24px 60px rgba(0, 0, 0, 0.3);
   will-change: transform;
+  transition: transform 100ms var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1));
+  transform-origin: center top;
 }
 
 .pdf-canvas,
@@ -953,6 +960,23 @@ select:focus-visible,
 
 .selection-handles {
   pointer-events: none;
+}
+.selection-handles-border {
+  position: absolute;
+  border: 1.5px dashed var(--accent);
+  pointer-events: none;
+}
+.selection-handle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  margin-top: -4px;
+  background: var(--kpdf-paper, #fff);
+  border: 1.5px solid var(--accent);
+  border-radius: 2px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  pointer-events: auto;
 }
 
 /* ─── Comments panel ───────────────────────────────────────── */

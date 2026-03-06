@@ -34,7 +34,7 @@ function centroid(points: Point[]): Point {
 const areaTool: ToolBehavior = {
   name: 'area',
   label: 'Area',
-  cursor: 'crosshair',
+  cursor: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23357a45' stroke-width='1.5'%3E%3Cline x1='12' y1='2' x2='12' y2='22'/%3E%3Cline x1='2' y1='12' x2='22' y2='12'/%3E%3Cline x1='12' y1='6' x2='14' y2='6'/%3E%3Cline x1='12' y1='10' x2='13' y2='10'/%3E%3Cline x1='12' y1='14' x2='13' y2='14'/%3E%3Cline x1='12' y1='18' x2='14' y2='18'/%3E%3C/svg%3E") 12 12, crosshair`,
 
   onPointerDown(ctx: ToolContext, e: NormalizedPointerEvent) {
     const draft = ctx.draft;
