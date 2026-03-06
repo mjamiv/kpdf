@@ -113,6 +113,8 @@ export default function App() {
   const panYRef = useRef(0);
   const renderedZoomRef = useRef(1);
   const zoomDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wheelZoomingRef = useRef(false);
+  const wheelZoomEndTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const panVelocityRef = useRef<{ x: number; y: number; time: number }[]>([]);
   const momentumRafRef = useRef<number | null>(null);
   const activePointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
@@ -148,6 +150,9 @@ export default function App() {
   const [panMode, setPanMode] = useState(false);
   const [spacePanActive, setSpacePanActive] = useState(false);
   const [isPanDragging, setIsPanDragging] = useState(false);
+  const [zoomWindowMode, setZoomWindowMode] = useState(false);
+  const zoomWindowRef = useRef<{ startX: number; startY: number; curX: number; curY: number; active: boolean } | null>(null);
+  const [zoomWindowRect, setZoomWindowRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
 
   // Phase 1 state
   const [pageScale, setPageScale] = useState<PageScale | null>(null);
@@ -288,7 +293,7 @@ export default function App() {
     zoomDebounceRef.current = setTimeout(() => {
       applyZoom(nextZoom, anchor ? { anchor } : undefined);
       zoomDebounceRef.current = null;
-    }, 200);
+    }, 80);
   }, [applyZoom]);
 
   const zoomIn = useCallback(() => applyZoom(stepZoom(zoom, VIEWER_ZOOM_STEP)), [applyZoom, zoom]);
@@ -484,6 +489,14 @@ export default function App() {
       startPanDrag(event.clientX, event.clientY);
       return;
     }
+
+    if (zoomWindowMode) {
+      event.preventDefault();
+      zoomWindowRef.current = { startX: event.clientX, startY: event.clientY, curX: event.clientX, curY: event.clientY, active: true };
+      setZoomWindowRect(null);
+      return;
+    }
+
     const activeTool = getTool(tool);
     if (!activeTool) return;
     activeTool.onPointerDown(makeToolCtx(), { point: toNormalizedPoint(event), shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey });
@@ -528,6 +541,25 @@ export default function App() {
       updatePanFromPointer(event.clientX, event.clientY);
       return;
     }
+
+    if (zoomWindowRef.current?.active) {
+      zoomWindowRef.current.curX = event.clientX;
+      zoomWindowRef.current.curY = event.clientY;
+      const shell = canvasShellRef.current;
+      if (shell) {
+        const sr = shell.getBoundingClientRect();
+        const sx = zoomWindowRef.current.startX - sr.left;
+        const sy = zoomWindowRef.current.startY - sr.top;
+        const cx = event.clientX - sr.left;
+        const cy = event.clientY - sr.top;
+        setZoomWindowRect({
+          x: Math.min(sx, cx), y: Math.min(sy, cy),
+          w: Math.abs(cx - sx), h: Math.abs(cy - sy),
+        });
+      }
+      return;
+    }
+
     const activeTool = getTool(tool);
     if (!activeTool) return;
     activeTool.onPointerMove(makeToolCtx(), { point: toNormalizedPoint(event), shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey });
@@ -579,6 +611,53 @@ export default function App() {
       panVelocityRef.current = [];
       return;
     }
+
+    if (zoomWindowRef.current?.active) {
+      const zw = zoomWindowRef.current;
+      zoomWindowRef.current = null;
+      setZoomWindowRect(null);
+
+      const shell = canvasShellRef.current;
+      if (shell) {
+        const sr = shell.getBoundingClientRect();
+        const x1 = zw.startX - sr.left;
+        const y1 = zw.startY - sr.top;
+        const x2 = event.clientX - sr.left;
+        const y2 = event.clientY - sr.top;
+        const bw = Math.abs(x2 - x1);
+        const bh = Math.abs(y2 - y1);
+        if (bw > 10 && bh > 10) {
+          const boxCx = Math.min(x1, x2) + bw / 2;
+          const boxCy = Math.min(y1, y2) + bh / 2;
+          const scaleX = sr.width / bw;
+          const scaleY = sr.height / bh;
+          const newZoomFactor = Math.min(scaleX, scaleY) * 0.9;
+          const nextZoom = clampZoom(zoom * newZoomFactor);
+
+          setZoom(nextZoom);
+          setFitMode('manual');
+
+          const wrap = shell.querySelector('.page-wrap') as HTMLElement | null;
+          if (wrap) wrap.style.transition = 'none';
+
+          requestAnimationFrame(() => {
+            const ratio = nextZoom / zoom;
+            const docCx = shell.scrollLeft + boxCx;
+            const docCy = shell.scrollTop + boxCy;
+            shell.scrollLeft = docCx * ratio - sr.width / 2;
+            shell.scrollTop = docCy * ratio - sr.height / 2;
+
+            if (wrap) requestAnimationFrame(() => { wrap.style.transition = ''; });
+          });
+
+          debouncedRenderZoom(nextZoom);
+        }
+      }
+
+      setZoomWindowMode(false);
+      return;
+    }
+
     const activeTool = getTool(tool);
     if (!activeTool) return;
     activeTool.onPointerUp(makeToolCtx(), { point: toNormalizedPoint(event), shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey });
@@ -686,9 +765,15 @@ export default function App() {
       if (e.key === ']' && selection.ids.size > 0) { e.preventDefault(); for (const id of selection.ids) dispatch({ type: 'SET_Z_ORDER', page: pageNumber, id, op: 'up' }); return; }
       if (e.key === '?') { panelState.toggleShortcuts(); return; }
 
-      // Escape: tool → select, selection → deselect
+      // Escape: zoom-window off → tool → select, selection → deselect
       if (e.key === 'Escape') {
         e.preventDefault();
+        if (zoomWindowMode) {
+          setZoomWindowMode(false);
+          zoomWindowRef.current = null;
+          setZoomWindowRect(null);
+          return;
+        }
         if (tool !== 'select') {
           setTool('select'); setLockedTool(null); setDraft(null); setPanMode(false);
           announceToScreenReader('Tool: select');
@@ -754,9 +839,14 @@ export default function App() {
         return;
       }
 
+      if (e.key === 'w' && !e.ctrlKey && !e.metaKey) {
+        toggleZoomWindow();
+        return;
+      }
+
       const newTool = getToolForKey(e.key);
       if (newTool && isToolAllowed(newTool, reviewState)) {
-        setPanMode(false); setLockedTool(null); setTool(newTool); setDraft(null);
+        setPanMode(false); setZoomWindowMode(false); setLockedTool(null); setTool(newTool); setDraft(null);
         if (newTool !== 'select') setSelection(deselectAll());
         announceToScreenReader(`Tool: ${newTool}`);
       }
@@ -766,7 +856,7 @@ export default function App() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [pdfDoc, tool, selection, currentAnnotations, pageNumber, dispatch, dispatchSilent, setDraft, makeToolCtx, reviewState, zoomIn, zoomOut, resetZoom, setPageNumber, pageCount, panelState]);
+  }, [pdfDoc, tool, selection, currentAnnotations, pageNumber, dispatch, dispatchSilent, setDraft, makeToolCtx, reviewState, zoomIn, zoomOut, resetZoom, setPageNumber, pageCount, panelState, toggleZoomWindow, zoomWindowMode]);
 
   // Space pan
   useEffect(() => {
@@ -1058,9 +1148,29 @@ export default function App() {
     const wantsZoom = event.ctrlKey || event.metaKey || scrollZoomMode;
     if (!wantsZoom) return;
     event.preventDefault();
-    const factor = event.deltaY < 0 ? 1.04 : 1 / 1.04;
+
+    // Trackpad pinch gestures report ctrlKey with small fractional deltaY;
+    // mouse wheels report larger integer deltaY. Normalize to a continuous
+    // zoom factor using an exponential curve for smoothness.
+    const delta = -event.deltaY;
+    const sensitivity = event.deltaMode === 1 ? 0.12 : 0.018;
+    const factor = Math.exp(delta * sensitivity);
     const nextZoom = clampZoom(zoom * factor);
-    if (Math.abs(nextZoom - zoom) < 0.001) return;
+    if (nextZoom === zoom) return;
+
+    // Mark zoom active — disables CSS transition for instant visual feedback
+    if (!wheelZoomingRef.current) {
+      wheelZoomingRef.current = true;
+      const wrap = canvasShellRef.current?.querySelector('.page-wrap') as HTMLElement | null;
+      if (wrap) wrap.style.transition = 'none';
+    }
+    if (wheelZoomEndTimer.current) clearTimeout(wheelZoomEndTimer.current);
+    wheelZoomEndTimer.current = setTimeout(() => {
+      wheelZoomingRef.current = false;
+      const wrap = canvasShellRef.current?.querySelector('.page-wrap') as HTMLElement | null;
+      if (wrap) wrap.style.transition = '';
+    }, 150);
+
     setZoom(nextZoom);
     setFitMode('manual');
     debouncedRenderZoom(nextZoom, { clientX: event.clientX, clientY: event.clientY });
@@ -1073,6 +1183,13 @@ export default function App() {
 
   const togglePanMode = useCallback(() => {
     setPanMode((prev) => !prev);
+    setZoomWindowMode(false);
+    setLockedTool(null); setTool('select'); setDraft(null); setSelection(deselectAll());
+  }, [setDraft]);
+
+  const toggleZoomWindow = useCallback(() => {
+    setZoomWindowMode((prev) => !prev);
+    setPanMode(false);
     setLockedTool(null); setTool('select'); setDraft(null); setSelection(deselectAll());
   }, [setDraft]);
 
@@ -1226,9 +1343,10 @@ export default function App() {
     exportXfdf: pdfDoc ? handleExportXfdf : undefined,
     toggleScaleCalibration: panelState.toggleScaleCalibration,
     toggleToolPresets: panelState.toggleToolPresets,
+    toggleZoomWindow,
   });
 
-  const overlayCursor = isPanDragging ? 'grabbing' : panMode || spacePanActive ? 'grab' : (getTool(tool)?.cursor ?? 'crosshair');
+  const overlayCursor = isPanDragging ? 'grabbing' : panMode || spacePanActive ? 'grab' : zoomWindowMode ? 'zoom-in' : (getTool(tool)?.cursor ?? 'crosshair');
 
   return (
     <div className={`app${isDragOver ? ' drag-over' : ''}`} onDrop={handleDrop} onDragOver={(e) => e.preventDefault()} onDragEnter={handleDragEnter} onDragLeave={handleDragLeave}>
@@ -1275,9 +1393,10 @@ export default function App() {
           <ToolRail
             tool={tool} lockedTool={lockedTool}
             reviewState={reviewState} pdfLoaded={!!pdfDoc}
-            panMode={panMode} color={color}
+            panMode={panMode} zoomWindowMode={zoomWindowMode} color={color}
             onToolClick={handleToolClick} onToolDoubleClick={handleToolDoubleClick}
-            onTogglePan={togglePanMode} onSetColor={setColor}
+            onTogglePan={togglePanMode} onToggleZoomWindow={toggleZoomWindow}
+            onSetColor={setColor}
             onToggleShortcuts={panelState.toggleShortcuts}
           />
         }
@@ -1320,7 +1439,7 @@ export default function App() {
         <main
           id="main-canvas"
           ref={canvasShellRef}
-          className={`canvas-shell${(panMode || spacePanActive || isPanDragging) ? ' pan-ready' : ''}${isPanDragging ? ' panning' : ''}`}
+          className={`canvas-shell${(panMode || spacePanActive || isPanDragging) ? ' pan-ready' : ''}${isPanDragging ? ' panning' : ''}${zoomWindowMode ? ' zoom-window-mode' : ''}`}
           onWheel={handleCanvasWheel}
           onPointerDown={handleShellPointerDown}
           onPointerMove={handleShellPointerMove}
@@ -1355,6 +1474,12 @@ export default function App() {
                 canvasWidth={overlayCanvasRef.current?.width ?? 0} canvasHeight={overlayCanvasRef.current?.height ?? 0}
                 canvasRect={canvasRect} onHandleDown={handleHandleDown} />
             </div>
+          )}
+          {zoomWindowRect && (
+            <div className="zoom-window-rect" style={{
+              left: zoomWindowRect.x, top: zoomWindowRect.y,
+              width: zoomWindowRect.w, height: zoomWindowRect.h,
+            }} />
           )}
         </main>
       </PanelLayout>

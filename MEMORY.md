@@ -83,6 +83,20 @@ kpdf is a React + Vite + TypeScript PDF markup tool using `pdfjs-dist` for rende
 - Marquee selection uses a separate `MarqueeDraft` type alongside `SelectDraft` in selectTool
 - Proportional zoom uses multiplicative factor (1.04x) instead of fixed step for smooth trackpad input
 
+### Smooth Zoom + Zoom Window Session
+- Replaced fixed 1.04x zoom factor with exponential curve (`Math.exp(delta * sensitivity)`) for smooth, proportional ctrl+scroll zoom
+- Tripled zoom sensitivity (0.006→0.018 pixel mode, 0.04→0.12 line mode) so less scrolling = more zoom
+- Fixed `clampZoom` quantization: `.toFixed(2)` → 4-decimal-place rounding to eliminate sticky snapping
+- CSS transition on `.page-wrap` temporarily disabled during active wheel zoom to prevent jitter
+- Reduced hi-res re-render debounce from 200ms to 80ms for snappier convergence
+- Added Zoom Window mode: draw a box to zoom into a specific area
+  - Viewer mode (like pan), not an annotation tool — handled in App.tsx pointer handlers
+  - Rubber-band rectangle overlay with `zoom-in` cursor
+  - Computes scale from box-to-viewport ratio, scrolls to center the selected area
+  - One-shot: auto-deactivates after each use
+  - Keyboard shortcut: `W`, command palette entry, tool rail button (magnifier icon)
+  - Escape cancels zoom-window mode
+
 ## Current State
 - Dev server: `npm run dev`
 - Lint: passing

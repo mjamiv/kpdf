@@ -29,9 +29,11 @@ Access app live at: https://mjamiv.github.io/kpdf/
 - **Responsive**: Compact tool rail at 980px, overlay sidebars at 768px
 
 ### Viewer Controls
-- **Smooth zoom**: CSS transform interpolation with debounced high-res re-render (0.1x-8x range)
+- **Smooth zoom**: exponential curve zoom with CSS transform interpolation + debounced high-res re-render (0.1x-8x range)
+- **High-sensitivity scroll zoom**: Ctrl/Cmd + wheel uses proportional exponential scaling — less scrolling, more zoom
 - **Proportional trackpad zoom**: continuous zoom from trackpad pinch gestures
 - **Pinch-to-zoom**: two-finger pinch and pan on touch devices
+- **Zoom window**: draw a box to zoom into a specific area (`W` key or tool rail icon)
 - **Inertial pan**: momentum-based panning with friction decay after release
 - Keyboard zoom: **Ctrl/Cmd +**, **Ctrl/Cmd -**, **Ctrl/Cmd 0**
 - Mouse zoom: **Ctrl/Cmd + wheel** (anchor-aware). Optional scroll-to-zoom mode (toggle via Cmd+K)
@@ -187,7 +189,8 @@ src/
 | Ctrl+Z / Ctrl+Shift+Z | Undo / Redo |
 | Arrows | Nudge (Shift = 10x) | Esc | Tool->Select / Deselect |
 | Delete | Remove selected | [ / ] | Z-order |
-| ? | Show shortcuts | Space (hold) | Pan |
+| W | Zoom window | ? | Show shortcuts |
+| Space (hold) | Pan |
 
 ## Known Limitations
 - Bundle size is large due to pdf.js worker (~1.2MB)

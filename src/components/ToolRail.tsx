@@ -23,10 +23,12 @@ type ToolRailProps = {
   reviewState: ReviewState;
   pdfLoaded: boolean;
   panMode: boolean;
+  zoomWindowMode: boolean;
   color: string;
   onToolClick: (tool: Tool) => void;
   onToolDoubleClick: (tool: Tool) => void;
   onTogglePan: () => void;
+  onToggleZoomWindow: () => void;
   onSetColor: (c: string) => void;
   onToggleShortcuts: () => void;
 };
@@ -49,7 +51,7 @@ const toolShortcut = (t: Tool) => TOOL_SHORTCUTS.find((s) => s.tool === t)?.key?
 const toolLabel = (t: Tool) => TOOL_SHORTCUTS.find((s) => s.tool === t)?.label ?? t;
 
 export default function ToolRail(props: ToolRailProps) {
-  const { tool, lockedTool, reviewState, pdfLoaded, panMode, color, onToolClick, onToolDoubleClick, onTogglePan, onSetColor, onToggleShortcuts } = props;
+  const { tool, lockedTool, reviewState, pdfLoaded, panMode, zoomWindowMode, color, onToolClick, onToolDoubleClick, onTogglePan, onToggleZoomWindow, onSetColor, onToggleShortcuts } = props;
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(loadCollapsedState);
 
   useEffect(() => {
@@ -123,6 +125,23 @@ export default function ToolRail(props: ToolRailProps) {
           disabled={!pdfLoaded}
           aria-label="Markup color"
         />
+      </Tooltip>
+
+      {/* Zoom window */}
+      <Tooltip content="Zoom window" shortcut="W" position="right">
+        <button
+          className={`rail-btn rail-bottom-btn${zoomWindowMode ? ' active' : ''}`}
+          onClick={onToggleZoomWindow}
+          disabled={!pdfLoaded}
+          aria-label="Zoom window — draw a box to zoom into an area"
+        >
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="8" cy="8" r="5.5" />
+            <line x1="12" y1="12" x2="16" y2="16" />
+            <line x1="6" y1="8" x2="10" y2="8" />
+            <line x1="8" y1="6" x2="8" y2="10" />
+          </svg>
+        </button>
       </Tooltip>
 
       {/* Pan mode */}

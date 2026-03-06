@@ -695,6 +695,19 @@ select:focus-visible,
   user-select: none;
 }
 
+.canvas-shell.zoom-window-mode {
+  cursor: zoom-in;
+}
+
+.zoom-window-rect {
+  position: absolute;
+  border: 2px solid var(--kpdf-accent, #111827);
+  background: rgba(17, 24, 39, 0.08);
+  pointer-events: none;
+  z-index: 9999;
+  border-radius: 2px;
+}
+
 .page-wrap {
   position: relative;
   width: fit-content;

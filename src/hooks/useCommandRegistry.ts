@@ -57,6 +57,7 @@ export type CommandRegistryOptions = {
   toggleScaleCalibration?: () => void;
   toggleToolPresets?: () => void;
   toggleScrollZoom?: () => void;
+  toggleZoomWindow?: () => void;
 };
 
 export function useCommandRegistry(options: CommandRegistryOptions): CommandItem[] {
@@ -232,6 +233,9 @@ export function useCommandRegistry(options: CommandRegistryOptions): CommandItem
     }
     if (options.toggleScrollZoom) {
       commands.push({ id: 'action-scroll-zoom', label: 'Toggle Scroll-to-Zoom', description: 'Zoom on scroll without Ctrl', category: 'action', action: options.toggleScrollZoom });
+    }
+    if (options.toggleZoomWindow) {
+      commands.push({ id: 'view-zoom-window', label: 'Zoom Window', description: 'Draw a box to zoom into an area', shortcut: 'W', category: 'view', action: options.toggleZoomWindow });
     }
 
     // Export commands

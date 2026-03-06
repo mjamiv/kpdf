@@ -5,7 +5,7 @@ export const VIEWER_FRAME_PADDING = 48;
 
 export function clampZoom(zoom: number, min = VIEWER_MIN_ZOOM, max = VIEWER_MAX_ZOOM): number {
   if (!Number.isFinite(zoom)) return 1;
-  return Math.max(min, Math.min(max, +zoom.toFixed(2)));
+  return Math.max(min, Math.min(max, Math.round(zoom * 10000) / 10000));
 }
 
 export function stepZoom(current: number, delta: number, min = VIEWER_MIN_ZOOM, max = VIEWER_MAX_ZOOM): number {
