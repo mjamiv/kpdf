@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { DocumentTab } from '../workflow/documentStore';
 
 type TabBarProps = {
@@ -7,7 +8,7 @@ type TabBarProps = {
   onCloseTab: (id: string) => void;
 };
 
-export default function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: TabBarProps) {
+function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: TabBarProps) {
   if (tabs.length === 0) return null;
 
   return (
@@ -41,3 +42,5 @@ export default function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: T
     </div>
   );
 }
+
+export default memo(TabBar);

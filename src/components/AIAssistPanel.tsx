@@ -35,7 +35,7 @@ export default function AIAssistPanel({
   annotations,
   aiManager,
   onApplyLabels,
-  onGroupAnnotations,
+  onGroupAnnotations: _onGroupAnnotations,
 }: AIAssistPanelProps) {
   const [classifications, setClassifications] = useState<ClassificationResult[]>([]);
   const [groups, setGroups] = useState<GroupSuggestion[]>([]);
@@ -122,26 +122,21 @@ export default function AIAssistPanel({
 
   if (!provider) {
     return (
-      <div className="ai-assist-panel" style={{ padding: 12 }}>
+      <div className="ai-assist-panel">
         <p>No AI provider configured.</p>
       </div>
     );
   }
 
   return (
-    <div className="ai-assist-panel" style={{
-      padding: 12, fontFamily: 'sans-serif', maxHeight: '100vh', overflow: 'auto',
-    }}>
-      <h3 style={{ margin: '0 0 12px' }}>AI Assist</h3>
+    <div className="ai-assist-panel">
+      <h3>AI Assist</h3>
 
       {error && (
-        <div style={{ color: '#cc0000', marginBottom: 8, padding: 8, background: '#fff0f0', borderRadius: 4 }}>
-          {error}
-        </div>
+        <div className="ai-assist-error">{error}</div>
       )}
 
-      {/* Action buttons */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+      <div className="ai-assist-actions">
         <button onClick={() => void handleClassify()} disabled={loading || annotations.length === 0}>
           Classify
         </button>
@@ -153,48 +148,40 @@ export default function AIAssistPanel({
         </button>
       </div>
 
-      {loading && <div style={{ color: '#999', marginBottom: 12 }}>Processing...</div>}
+      {loading && (
+        <div className="ai-assist-loading">
+          <span className="kpdf-spinner" />Processing…
+        </div>
+      )}
 
-      {/* Classifications */}
       {classifications.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <h4 style={{ margin: '0 0 8px' }}>Classifications</h4>
+        <div className="ai-assist-section">
+          <h4>Classifications</h4>
           {classifications.map((c) => (
-            <div key={c.annotationId} style={{
-              padding: 8, marginBottom: 4, background: '#f8f8f8', borderRadius: 4,
-            }}>
+            <div key={c.annotationId} className="ai-assist-classification-card">
               <div><strong>{c.category}</strong> ({(c.confidence * 100).toFixed(0)}%)</div>
-              <div style={{ fontSize: 12, color: '#666' }}>
-                ID: {c.annotationId.slice(0, 8)}... | Labels: {c.suggestedLabels.join(', ')}
+              <div className="ai-assist-card-meta">
+                Labels: {c.suggestedLabels.join(', ')}
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Group suggestions */}
       {groups.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <h4 style={{ margin: '0 0 8px' }}>Suggested Groups</h4>
+        <div className="ai-assist-section">
+          <h4>Suggested Groups</h4>
           {groups.map((g, i) => (
-            <div key={i} style={{
-              padding: 8, marginBottom: 4, background: rejectedGroups.has(i) ? '#f0f0f0' : '#f0f8ff', borderRadius: 4,
-              opacity: rejectedGroups.has(i) ? 0.5 : 1,
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div key={i} className={`ai-assist-group-card${rejectedGroups.has(i) ? ' rejected' : ''}`}>
+              <div className="ai-assist-card-row">
                 <strong>{g.name}</strong>
-                <span style={{ display: 'flex', gap: 4 }}>
-                  {!rejectedGroups.has(i) && (
-                    <button onClick={() => onGroupAnnotations(g)} style={{ fontSize: 12 }}>
-                      Accept
-                    </button>
-                  )}
-                  <button onClick={() => toggleGroupReject(i)} style={{ fontSize: 12 }}>
+                <span className="ai-assist-card-actions">
+                  <button onClick={() => toggleGroupReject(i)}>
                     {rejectedGroups.has(i) ? 'Undo' : 'Reject'}
                   </button>
                 </span>
               </div>
-              <div style={{ fontSize: 12, color: '#666' }}>
+              <div className="ai-assist-card-meta">
                 {g.reason} ({g.annotationIds.length} items)
               </div>
             </div>
@@ -202,27 +189,21 @@ export default function AIAssistPanel({
         </div>
       )}
 
-      {/* Smart labels */}
       {labels.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <h4 style={{ margin: '0 0 8px' }}>Auto-Labels</h4>
+        <div className="ai-assist-section">
+          <h4>Auto-Labels</h4>
           {labels.map((l) => (
-            <div key={l.annotationId} style={{
-              padding: 8, marginBottom: 4, background: rejectedLabels.has(l.annotationId) ? '#f0f0f0' : '#f0fff0', borderRadius: 4,
-              opacity: rejectedLabels.has(l.annotationId) ? 0.5 : 1,
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div key={l.annotationId} className={`ai-assist-label-card${rejectedLabels.has(l.annotationId) ? ' rejected' : ''}`}>
+              <div className="ai-assist-card-row">
                 <strong>{l.suggestedLabel}</strong>
-                <button onClick={() => toggleLabelReject(l.annotationId)} style={{ fontSize: 12 }}>
+                <button onClick={() => toggleLabelReject(l.annotationId)}>
                   {rejectedLabels.has(l.annotationId) ? 'Undo' : 'Reject'}
                 </button>
               </div>
-              <div style={{ fontSize: 12, color: '#666' }}>
-                {l.basis} (ID: {l.annotationId.slice(0, 8)}...)
-              </div>
+              <div className="ai-assist-card-meta">{l.basis}</div>
             </div>
           ))}
-          <button onClick={acceptLabels} style={{ marginTop: 8 }}>
+          <button onClick={acceptLabels} className="ai-assist-apply-btn">
             Apply Accepted Labels
           </button>
         </div>

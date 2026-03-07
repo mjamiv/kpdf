@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { memo, useCallback } from 'react';
 import Tooltip from './Tooltip';
 
 type TopBarProps = {
@@ -28,7 +28,7 @@ type TopBarProps = {
   rightOpen: boolean;
 };
 
-export default function TopBar(props: TopBarProps) {
+function TopBar(props: TopBarProps) {
   const {
     pdfLoaded, isBusy, zoom, fitMode, pageNumber, pageCount, pageInput,
     onOpenFile, onSave, onUndo, onRedo,
@@ -91,7 +91,7 @@ export default function TopBar(props: TopBarProps) {
       <div className="top-bar-spacer" />
 
       {/* Terminal title */}
-      <div className="top-bar-title">kpdf@local — 80 × 24</div>
+      <div className="top-bar-title">KPDF — 80 × 24</div>
 
       {/* Center spacer */}
       <div className="top-bar-spacer" />
@@ -147,3 +147,5 @@ export default function TopBar(props: TopBarProps) {
     </header>
   );
 }
+
+export default memo(TopBar);

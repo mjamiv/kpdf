@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { RightTab } from '../hooks/usePanelState';
 import type { Annotation, AnnotationsByPage } from '../types';
 import type { CommentThread } from '../workflow/threading';
@@ -45,7 +46,7 @@ const TAB_LABELS: Record<RightTab, string> = {
 
 const TABS: RightTab[] = ['activity', 'markups', 'ai'];
 
-export default function RightPanel(props: RightPanelProps) {
+function RightPanel(props: RightPanelProps) {
   const { open, tab, onSetTab, onClose } = props;
 
   return (
@@ -114,3 +115,5 @@ export default function RightPanel(props: RightPanelProps) {
     </aside>
   );
 }
+
+export default memo(RightPanel);

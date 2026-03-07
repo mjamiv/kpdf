@@ -75,6 +75,7 @@ function CommentNode({
       <button
         className="thread-reply-btn"
         onClick={() => onReply(comment.id)}
+        aria-label="Reply to comment"
       >
         Reply
       </button>
@@ -135,11 +136,11 @@ function ThreadView({
         </button>
         <span className="thread-count">{thread.comments.length} comment{thread.comments.length !== 1 ? 's' : ''}</span>
         {thread.resolved ? (
-          <button className="thread-reopen-btn" onClick={() => onReopen(thread.id)}>
+          <button className="thread-reopen-btn" onClick={() => onReopen(thread.id)} aria-label="Reopen thread">
             Reopen
           </button>
         ) : (
-          <button className="thread-resolve-btn" onClick={() => onResolve(thread.id)}>
+          <button className="thread-resolve-btn" onClick={() => onResolve(thread.id)} aria-label="Resolve thread">
             Resolve
           </button>
         )}
@@ -161,7 +162,7 @@ function ThreadView({
             {replyParentId && (
               <div className="thread-reply-to">
                 Replying to a comment{' '}
-                <button onClick={() => setReplyParentId(undefined)}>Cancel</button>
+                <button onClick={() => setReplyParentId(undefined)} aria-label="Cancel reply">Cancel</button>
               </div>
             )}
             <input
@@ -173,11 +174,13 @@ function ThreadView({
               onKeyDown={(e) => {
                 if (e.key === 'Enter') handleSubmitReply();
               }}
+              aria-label="Reply text"
             />
             <button
               className="thread-submit-btn"
               onClick={handleSubmitReply}
               disabled={!replyText.trim()}
+              aria-label="Send reply"
             >
               Send
             </button>

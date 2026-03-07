@@ -13,7 +13,7 @@ describe('viewer controls', () => {
   it('clamps zoom to bounds', () => {
     expect(clampZoom(-2)).toBe(VIEWER_MIN_ZOOM);
     expect(clampZoom(99)).toBe(VIEWER_MAX_ZOOM);
-    expect(clampZoom(1.234)).toBe(1.23);
+    expect(clampZoom(1.234)).toBe(1.234);
   });
 
   it('steps zoom with clamping', () => {

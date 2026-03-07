@@ -24,8 +24,8 @@ Access app live at: https://mjamiv.github.io/kpdf/
 - **Tooltips**: Delayed hover tooltips with keyboard shortcut badges on all TopBar and ToolRail buttons
 - **Loading indicator**: Animated progress bar during PDF operations
 - **Command palette**: Fuzzy-search commands via Cmd+K / Ctrl+K (includes migrated toolbar actions)
-- **Status bar**: Shows active tool, locked state, and Cmd+K hint
-- **Accessibility**: `prefers-reduced-motion` support, focus-visible indicators, no outline suppression
+- **Status bar**: Shows active tool, locked state, Cmd+K hint, and error emphasis styling
+- **Accessibility**: `prefers-reduced-motion` support, focus-visible indicators, no outline suppression, comprehensive ARIA labels across all interactive elements
 - **Responsive**: Compact tool rail at 980px, overlay sidebars at 768px
 
 ### Viewer Controls
@@ -35,6 +35,7 @@ Access app live at: https://mjamiv.github.io/kpdf/
 - **Pinch-to-zoom**: two-finger pinch and pan on touch devices
 - **Zoom window**: draw a box to zoom into a specific area (`W` key or tool rail icon)
 - **Inertial pan**: momentum-based panning with friction decay after release
+- **File shortcuts**: Cmd+O (open), Cmd+S (save)
 - Keyboard zoom: **Ctrl/Cmd +**, **Ctrl/Cmd -**, **Ctrl/Cmd 0**
 - Mouse zoom: **Ctrl/Cmd + wheel** (anchor-aware). Optional scroll-to-zoom mode (toggle via Cmd+K)
 - Fit modes: **Fit Width**, **Fit Page**, plus fixed zoom presets
@@ -184,6 +185,7 @@ src/
 | M | Measurement | G | Polygon | S | Stamp | E | Area |
 | N | Angle | X | Count | D | Dimension | O | Ellipse |
 | L | Polyline | U | Hyperlink |
+| Cmd+O | Open PDF | Cmd+S | Save |
 | Cmd+K | Command palette | Cmd+A | Select all |
 | Cmd+C / V / D | Copy / Paste / Duplicate |
 | Ctrl+Z / Ctrl+Shift+Z | Undo / Redo |
@@ -193,6 +195,5 @@ src/
 | Space (hold) | Pan |
 
 ## Known Limitations
-- Bundle size is large due to pdf.js worker (~1.2MB)
 - Collaboration features are local-only (no WebSocket server yet)
 - AI features use local heuristics (no cloud AI provider integrated yet)

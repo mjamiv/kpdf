@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { GlobalWorkerOptions, getDocument, type PDFDocumentProxy } from 'pdfjs-dist';
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import type { PDFDocumentProxy } from 'pdfjs-dist';
 import './App.css';
 import {
   DEFAULT_EMBED_SIZE_THRESHOLD_BYTES,
@@ -67,14 +66,25 @@ import {
   zoomForFitWidth,
 } from './viewer/controls';
 
+let pdfjsReady: Promise<typeof import('pdfjs-dist')> | null = null;
+async function getPdfjs() {
+  if (!pdfjsReady) {
+    pdfjsReady = (async () => {
+      const pdfjs = await import('pdfjs-dist');
+      const { default: workerUrl } = await import('pdfjs-dist/build/pdf.worker.min.mjs?url');
+      pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+      return pdfjs;
+    })();
+  }
+  return pdfjsReady;
+}
+
 type TabData = {
   pdfDoc: PDFDocumentProxy;
   sourceBytes: Uint8Array;
   history: UndoStack;
   author: string;
 };
-
-GlobalWorkerOptions.workerSrc = workerUrl;
 
 const BASE_RENDER_SCALE = 1.4;
 
@@ -436,12 +446,12 @@ export default function App() {
   }, [pdfDoc, fitMode, applyCurrentFitMode]);
 
   // Pointer helpers
-  const toNormalizedPoint = (event: React.PointerEvent<HTMLCanvasElement>): Point => {
+  const toNormalizedPoint = useCallback((event: React.PointerEvent<HTMLCanvasElement>): Point => {
     const canvas = overlayCanvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
     return { x: clamp01((event.clientX - rect.left) / rect.width), y: clamp01((event.clientY - rect.top) / rect.height) };
-  };
+  }, []);
 
   const makeToolCtx = useCallback(() => ({
     dispatch, page: pageNumber, color, author: author.trim() || 'local-user',
@@ -715,17 +725,38 @@ export default function App() {
     panVelocityRef.current = [];
   };
 
+  const toggleZoomWindow = useCallback(() => {
+    setZoomWindowMode((prev) => !prev);
+    setPanMode(false);
+    setLockedTool(null); setTool('select'); setDraft(null); setSelection(deselectAll());
+  }, [setDraft]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (!pdfDoc) return;
       const tgt = e.target as HTMLElement;
       if (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA') return;
 
-      // Cmd+K — command palette
+      // Cmd+O — open file (works even without PDF loaded)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'o') {
+        e.preventDefault();
+        fileInputRef.current?.click();
+        return;
+      }
+
+      // Cmd+K — command palette (works even without PDF loaded)
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
         panelState.toggleCommandPalette();
+        return;
+      }
+
+      if (!pdfDoc) return;
+
+      // Cmd+S — save
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        savePdf();
         return;
       }
 
@@ -856,7 +887,7 @@ export default function App() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [pdfDoc, tool, selection, currentAnnotations, pageNumber, dispatch, dispatchSilent, setDraft, makeToolCtx, reviewState, zoomIn, zoomOut, resetZoom, setPageNumber, pageCount, panelState, toggleZoomWindow, zoomWindowMode]);
+  }, [pdfDoc, tool, selection, currentAnnotations, pageNumber, dispatch, dispatchSilent, setDraft, makeToolCtx, reviewState, zoomIn, zoomOut, resetZoom, setPageNumber, pageCount, panelState, toggleZoomWindow, zoomWindowMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Space pan
   useEffect(() => {
@@ -966,7 +997,8 @@ export default function App() {
   const loadPdf = async (bytes: Uint8Array, name: string) => {
     setIsBusy(true);
     setStatus('Loading PDF...');
-    const loadingTask = getDocument({ data: bytes });
+    const pdfjs = await getPdfjs();
+    const loadingTask = pdfjs.getDocument({ data: bytes });
     const doc = await loadingTask.promise;
     const metadata = await doc.getMetadata().catch(() => null);
     const attachments = await doc.getAttachments().catch(() => null);
@@ -1187,12 +1219,6 @@ export default function App() {
     setLockedTool(null); setTool('select'); setDraft(null); setSelection(deselectAll());
   }, [setDraft]);
 
-  const toggleZoomWindow = useCallback(() => {
-    setZoomWindowMode((prev) => !prev);
-    setPanMode(false);
-    setLockedTool(null); setTool('select'); setDraft(null); setSelection(deselectAll());
-  }, [setDraft]);
-
   // Tool presets
   const handleApplyPreset = useCallback((preset: ToolPreset) => {
     setColor(preset.color);
@@ -1351,9 +1377,9 @@ export default function App() {
   return (
     <div className={`app${isDragOver ? ' drag-over' : ''}`} onDrop={handleDrop} onDragOver={(e) => e.preventDefault()} onDragEnter={handleDragEnter} onDragLeave={handleDragLeave}>
       {/* Hidden file inputs */}
-      <input ref={fileInputRef} type="file" accept="application/pdf" onChange={handleFileChange} hidden />
-      <input ref={sidecarInputRef} type="file" accept="application/json,.json,.kpdf.json" onChange={handleSidecarFileChange} hidden />
-      <input ref={xfdfInputRef} type="file" accept=".xfdf,application/xml,text/xml" onChange={handleXfdfFileChange} hidden />
+      <input ref={fileInputRef} type="file" accept="application/pdf" onChange={handleFileChange} hidden aria-label="Open PDF file" />
+      <input ref={sidecarInputRef} type="file" accept="application/json,.json,.kpdf.json" onChange={handleSidecarFileChange} hidden aria-label="Import sidecar annotations" />
+      <input ref={xfdfInputRef} type="file" accept=".xfdf,application/xml,text/xml" onChange={handleXfdfFileChange} hidden aria-label="Import XFDF annotations" />
 
       {/* Skip nav */}
       <a href="#main-canvas" className="skip-nav">Skip to content</a>
@@ -1451,7 +1477,7 @@ export default function App() {
           {!pdfDoc ? (
             <div className={`empty-state${isDragOver ? ' drag-active' : ''}`}>
               <div className="empty-state-icon">
-                <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <rect x="8" y="4" width="32" height="40" rx="3" />
                   <polyline points="24,4 24,16 36,16" />
                   <line x1="16" y1="24" x2="32" y2="24" />
@@ -1506,7 +1532,7 @@ export default function App() {
       {isDragOver && (
         <div className="drag-overlay">
           <div className="drag-overlay-content">
-            <svg width="40" height="40" viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <svg width="40" height="40" viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
               <path d="M20 8v24M8 20h24" />
             </svg>
             <span>Drop PDF to open</span>

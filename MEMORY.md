@@ -97,14 +97,52 @@ kpdf is a React + Vite + TypeScript PDF markup tool using `pdfjs-dist` for rende
   - Keyboard shortcut: `W`, command palette entry, tool rail button (magnifier icon)
   - Escape cancels zoom-window mode
 
+### Gold-Team Investor Review
+5-agent review to make the app investor-presentation ready.
+
+**Agent 1 — Brand & First Impression**:
+- Created `public/kpdf.svg` favicon (terminal `>_` motif from brand spec)
+- Updated `index.html`: branded title, meta description, Open Graph tags, theme-color
+- Deleted scaffold leftover `src/assets/react.svg`
+- Set `base: '/kpdf/'` in `vite.config.ts` for GitHub Pages deployment
+- Branded TopBar title: `kpdf@local` → `KPDF`
+
+**Agent 2 — Keyboard Shortcuts & Interaction Fixes**:
+- Wired Cmd+O (open file) and Cmd+S (save) keyboard shortcuts
+- Moved Cmd+K and Cmd+O above `!pdfDoc` guard so they work on empty state
+- Removed non-functional "Accept" button from AI group suggestions
+- Fixed pre-existing build error: moved `toggleZoomWindow` above its usage in useEffect deps
+
+**Agent 3 — Theme Consistency & UI Polish**:
+- Migrated StorageBrowser.tsx from ~15 inline styles to CSS classes with `--kpdf-*` design tokens
+- Migrated AIAssistPanel.tsx from inline styles to CSS classes with design tokens
+- Removed exposed annotation IDs from AI panel UI
+- Added CSS spinner (`.kpdf-spinner`) for loading states
+- Replaced 9 hardcoded hex colors in App.css with design token references
+- Added error emphasis to StatusBar (red dot + text for error messages)
+
+**Agent 4 — Performance**:
+- Lazy-loaded `pdfjs-dist` via dynamic import (`getPdfjs()` helper) — initial bundle reduced ~400KB
+- Wrapped 7 pure components in `React.memo`: StatusBar, TabBar, PanelLayout, LeftSidebar, RightPanel, ToolRail, TopBar
+- Wrapped `toNormalizedPoint` in `useCallback` for stable reference
+
+**Agent 5 — Accessibility**:
+- Added 20+ `aria-label` attributes across ThreadedComments, PunchListPanel, LeftSidebar, App.tsx
+- Added `aria-hidden="true"` to decorative SVGs (chevrons, icons)
+- Added `aria-label` to 3 hidden file inputs
+
+**Bonus**: Fixed pre-existing `clampZoom` test (2-decimal → 4-decimal expectation)
+
 ## Current State
 - Dev server: `npm run dev`
-- Lint: passing
+- Lint: passing (0 errors, 3 pre-existing warnings)
 - Unit tests: **585 passing** (`npm test`)
 - Build: passing (`npm run build`)
+- pdfjs-dist is now code-split (loaded on first PDF open)
 
 ## Next Best Steps
-1. Performance pass: bundle splitting, first-render profiling
-2. Real E2E with Playwright runner (current tests written but not run in CI)
-3. Rotation handle on selection (plumbing exists but UI not wired)
-4. Multi-page virtual scroll with scroll-snap
+1. Real E2E with Playwright runner (current tests written but not run in CI)
+2. Rotation handle on selection (plumbing exists but UI not wired)
+3. Multi-page virtual scroll with scroll-snap
+4. WebSocket collaboration backend
+5. GitHub Actions CI/CD pipeline for automated build, test, and deploy

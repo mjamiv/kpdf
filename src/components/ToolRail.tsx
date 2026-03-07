@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { memo, useState, useEffect } from 'react';
 import type { Tool } from '../types';
 import { TOOL_SHORTCUTS } from '../tools/shortcuts';
 import { isToolAllowed, type ReviewState } from '../workflow/reviewMode';
@@ -50,7 +50,7 @@ const TOOL_GROUPS: ToolGroup[] = [
 const toolShortcut = (t: Tool) => TOOL_SHORTCUTS.find((s) => s.tool === t)?.key?.toUpperCase() ?? '';
 const toolLabel = (t: Tool) => TOOL_SHORTCUTS.find((s) => s.tool === t)?.label ?? t;
 
-export default function ToolRail(props: ToolRailProps) {
+function ToolRail(props: ToolRailProps) {
   const { tool, lockedTool, reviewState, pdfLoaded, panMode, zoomWindowMode, color, onToolClick, onToolDoubleClick, onTogglePan, onToggleZoomWindow, onSetColor, onToggleShortcuts } = props;
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(loadCollapsedState);
 
@@ -174,3 +174,5 @@ export default function ToolRail(props: ToolRailProps) {
     </nav>
   );
 }
+
+export default memo(ToolRail);

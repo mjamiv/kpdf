@@ -157,10 +157,10 @@ export default function PunchListPanel({
 
       {/* Actions bar */}
       <div className="punch-list-actions">
-        <button onClick={() => setShowAddForm(!showAddForm)}>
+        <button onClick={() => setShowAddForm(!showAddForm)} aria-label={showAddForm ? 'Cancel adding item' : 'Add punch list item'}>
           {showAddForm ? 'Cancel' : '+ Add Item'}
         </button>
-        <button onClick={handleExportCsv}>Export CSV</button>
+        <button onClick={handleExportCsv} aria-label="Export punch list to CSV">Export CSV</button>
       </div>
 
       {/* Add form */}
@@ -171,19 +171,22 @@ export default function PunchListPanel({
             placeholder="Title"
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
+            aria-label="Item title"
           />
           <textarea
             placeholder="Description"
             value={newDescription}
             onChange={(e) => setNewDescription(e.target.value)}
+            aria-label="Item description"
           />
           <input
             type="text"
             placeholder="Assignee"
             value={newAssignee}
             onChange={(e) => setNewAssignee(e.target.value)}
+            aria-label="Item assignee"
           />
-          <select value={newPriority} onChange={(e) => setNewPriority(e.target.value as PunchItem['priority'])}>
+          <select value={newPriority} onChange={(e) => setNewPriority(e.target.value as PunchItem['priority'])} aria-label="Item priority">
             {PRIORITY_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
           <input
@@ -191,6 +194,7 @@ export default function PunchListPanel({
             placeholder="Category"
             value={newCategory}
             onChange={(e) => setNewCategory(e.target.value)}
+            aria-label="Item category"
           />
           <input
             type="number"
@@ -198,8 +202,9 @@ export default function PunchListPanel({
             value={newPage}
             min={1}
             onChange={(e) => setNewPage(Number(e.target.value))}
+            aria-label="Item page number"
           />
-          <button onClick={handleAddItem} disabled={!newTitle.trim()}>
+          <button onClick={handleAddItem} disabled={!newTitle.trim()} aria-label="Save new item">
             Add
           </button>
         </div>
@@ -229,6 +234,7 @@ export default function PunchListPanel({
                 <button
                   className="pl-link"
                   onClick={() => onNavigateToAnnotation(item.annotationId!, item.page)}
+                  aria-label={`Navigate to ${item.title}`}
                 >
                   {item.title}
                 </button>
@@ -240,6 +246,7 @@ export default function PunchListPanel({
               <select
                 value={item.status}
                 onChange={(e) => onUpdateItem(item.id, { status: e.target.value as PunchItem['status'] })}
+                aria-label={`Status for item ${item.number}`}
               >
                 {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
@@ -248,7 +255,7 @@ export default function PunchListPanel({
             <span className="pl-col-assignee">{item.assignee}</span>
             <span className="pl-col-due">{item.dueDate ?? '-'}</span>
             <span className="pl-col-actions">
-              <button onClick={() => onRemoveItem(item.id)} title="Remove item">x</button>
+              <button onClick={() => onRemoveItem(item.id)} title="Remove item" aria-label={`Remove item ${item.number}`}>x</button>
             </span>
           </div>
         ))}

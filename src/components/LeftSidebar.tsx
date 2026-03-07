@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import SheetIndex, { type SheetIndexEntry } from './SheetIndex';
 
 type LeftSidebarProps = {
@@ -9,7 +9,7 @@ type LeftSidebarProps = {
   onNavigate: (page: number) => void;
 };
 
-export default function LeftSidebar({ open, sheetPages, currentPage, pageCount, onNavigate }: LeftSidebarProps) {
+function LeftSidebar({ open, sheetPages, currentPage, pageCount, onNavigate }: LeftSidebarProps) {
   const [sheetsExpanded, setSheetsExpanded] = useState(true);
   const [pagesExpanded, setPagesExpanded] = useState(true);
   const hasSheets = sheetPages.some((s) => s.sheetNumber !== null);
@@ -20,8 +20,8 @@ export default function LeftSidebar({ open, sheetPages, currentPage, pageCount, 
       <div className="sidebar-content">
         {hasSheets && (
           <div className="sidebar-section">
-            <button className="sidebar-section-toggle" onClick={() => setSheetsExpanded(!sheetsExpanded)} aria-expanded={sheetsExpanded}>
-              <svg className={`section-chevron${sheetsExpanded ? ' open' : ''}`} width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <button className="sidebar-section-toggle" onClick={() => setSheetsExpanded(!sheetsExpanded)} aria-expanded={sheetsExpanded} aria-label="Toggle sheets section">
+              <svg className={`section-chevron${sheetsExpanded ? ' open' : ''}`} width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
                 <polyline points="3,4 5,6 7,4" />
               </svg>
               <span>Sheets</span>
@@ -32,8 +32,8 @@ export default function LeftSidebar({ open, sheetPages, currentPage, pageCount, 
           </div>
         )}
         <div className="sidebar-section">
-          <button className="sidebar-section-toggle" onClick={() => setPagesExpanded(!pagesExpanded)} aria-expanded={pagesExpanded}>
-            <svg className={`section-chevron${pagesExpanded ? ' open' : ''}`} width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+          <button className="sidebar-section-toggle" onClick={() => setPagesExpanded(!pagesExpanded)} aria-expanded={pagesExpanded} aria-label="Toggle pages section">
+            <svg className={`section-chevron${pagesExpanded ? ' open' : ''}`} width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
               <polyline points="3,4 5,6 7,4" />
             </svg>
             <span>Pages</span>
@@ -45,6 +45,7 @@ export default function LeftSidebar({ open, sheetPages, currentPage, pageCount, 
                   key={p}
                   className={`page-thumb${p === currentPage ? ' active' : ''}`}
                   onClick={() => onNavigate(p)}
+                  aria-label={`Go to page ${p}`}
                 >
                   Page {p}
                 </button>
@@ -57,3 +58,5 @@ export default function LeftSidebar({ open, sheetPages, currentPage, pageCount, 
     </aside>
   );
 }
+
+export default memo(LeftSidebar);

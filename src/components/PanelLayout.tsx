@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { memo, type ReactNode } from 'react';
 
 type PanelLayoutProps = {
   toolRail: ReactNode;
@@ -7,7 +7,7 @@ type PanelLayoutProps = {
   children: ReactNode;
 };
 
-export default function PanelLayout({ toolRail, leftSidebar, rightPanel, children }: PanelLayoutProps) {
+function PanelLayout({ toolRail, leftSidebar, rightPanel, children }: PanelLayoutProps) {
   return (
     <div className="panel-layout">
       {toolRail}
@@ -17,3 +17,5 @@ export default function PanelLayout({ toolRail, leftSidebar, rightPanel, childre
     </div>
   );
 }
+
+export default memo(PanelLayout);

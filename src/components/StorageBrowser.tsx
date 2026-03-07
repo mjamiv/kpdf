@@ -127,20 +127,14 @@ export default function StorageBrowser({ storageManager, onFileSelect, onClose }
   }
 
   return (
-    <div className="storage-browser" style={{
-      position: 'fixed', top: 0, right: 0, width: 400, height: '100vh',
-      background: '#fff', borderLeft: '1px solid #ddd', zIndex: 1000,
-      display: 'flex', flexDirection: 'column', fontFamily: 'sans-serif',
-    }}>
-      {/* Header */}
-      <div style={{ padding: 12, borderBottom: '1px solid #ddd', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div className="storage-browser">
+      <div className="storage-browser-header">
         <strong>Storage Browser</strong>
-        <button onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 18 }} aria-label="Close">X</button>
+        <button onClick={onClose} className="storage-browser-close" aria-label="Close">X</button>
       </div>
 
-      {/* Provider selector */}
       {providers.length > 1 && (
-        <div style={{ padding: '8px 12px', borderBottom: '1px solid #eee' }}>
+        <div className="storage-browser-provider">
           <label htmlFor="provider-select">Provider: </label>
           <select
             id="provider-select"
@@ -157,19 +151,13 @@ export default function StorageBrowser({ storageManager, onFileSelect, onClose }
         </div>
       )}
 
-      {/* Breadcrumbs */}
-      <div style={{ padding: '8px 12px', borderBottom: '1px solid #eee', display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+      <div className="storage-browser-breadcrumbs">
         {breadcrumbs.map((crumb, i) => (
           <span key={i}>
-            {i > 0 && <span style={{ margin: '0 2px' }}>/</span>}
+            {i > 0 && <span className="storage-browser-breadcrumb-sep">/</span>}
             <button
               onClick={() => handleBreadcrumb(i)}
-              style={{
-                border: 'none', background: 'none', cursor: 'pointer',
-                color: i === breadcrumbs.length - 1 ? '#333' : '#0066cc',
-                fontWeight: i === breadcrumbs.length - 1 ? 'bold' : 'normal',
-                padding: '2px 4px',
-              }}
+              className={`storage-browser-breadcrumb${i === breadcrumbs.length - 1 ? ' active' : ''}`}
             >
               {crumb === '/' ? 'Root' : crumb}
             </button>
@@ -177,47 +165,37 @@ export default function StorageBrowser({ storageManager, onFileSelect, onClose }
         ))}
       </div>
 
-      {/* Upload */}
-      <div style={{ padding: '8px 12px', borderBottom: '1px solid #eee' }}>
+      <div className="storage-browser-upload">
         <input
           ref={fileInputRef}
           type="file"
           onChange={(e) => void handleUpload(e)}
-          style={{ display: 'none' }}
+          hidden
           aria-label="Upload file"
         />
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          style={{ padding: '6px 12px', cursor: 'pointer' }}
-        >
+        <button onClick={() => fileInputRef.current?.click()}>
           Upload File
         </button>
       </div>
 
-      {/* Error */}
       {error && (
-        <div style={{ padding: '8px 12px', color: '#cc0000', background: '#fff0f0', borderBottom: '1px solid #eee' }}>
-          {error}
-        </div>
+        <div className="storage-browser-error">{error}</div>
       )}
 
-      {/* File list */}
-      <div style={{ flex: 1, overflow: 'auto' }}>
-        {loading && <div style={{ padding: 12, color: '#999' }}>Loading...</div>}
+      <div className="storage-browser-files">
+        {loading && (
+          <div className="storage-browser-loading">
+            <span className="kpdf-spinner" />Loading…
+          </div>
+        )}
         {!loading && files.length === 0 && (
-          <div style={{ padding: 12, color: '#999' }}>No files found.</div>
+          <div className="storage-browser-empty">No files found.</div>
         )}
         {files.map((file) => (
-          <div
-            key={file.path}
-            style={{
-              padding: '8px 12px', borderBottom: '1px solid #f0f0f0',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            }}
-          >
-            <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => void handleFileClick(file)}>
-              <div style={{ fontWeight: 500 }}>{file.name}</div>
-              <div style={{ fontSize: 12, color: '#888' }}>
+          <div key={file.path} className="storage-browser-file">
+            <div className="storage-browser-file-info" onClick={() => void handleFileClick(file)}>
+              <div className="storage-browser-file-name">{file.name}</div>
+              <div className="storage-browser-file-meta">
                 {formatSize(file.size)} | {new Date(file.lastModified).toLocaleDateString()}
               </div>
             </div>
@@ -226,13 +204,13 @@ export default function StorageBrowser({ storageManager, onFileSelect, onClose }
                 <span>
                   <button
                     onClick={() => void handleDelete(file.path)}
-                    style={{ color: '#cc0000', border: 'none', background: 'none', cursor: 'pointer', marginRight: 4 }}
+                    className="storage-browser-delete-confirm"
                   >
                     Confirm
                   </button>
                   <button
                     onClick={() => setDeleteConfirm(null)}
-                    style={{ border: 'none', background: 'none', cursor: 'pointer' }}
+                    className="storage-browser-delete-cancel"
                   >
                     Cancel
                   </button>
@@ -240,7 +218,7 @@ export default function StorageBrowser({ storageManager, onFileSelect, onClose }
               ) : (
                 <button
                   onClick={() => setDeleteConfirm(file.path)}
-                  style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#cc0000' }}
+                  className="storage-browser-delete"
                   aria-label={`Delete ${file.name}`}
                 >
                   Delete
