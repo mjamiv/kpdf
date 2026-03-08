@@ -20,12 +20,12 @@ Access app live at: https://mjamiv.github.io/kpdf/
 - **Left sidebar**: Unified "Document" view with collapsible Sheets and Pages sections
 - **Right panel**: 3-tab interface — Activity (comments + punch list), Markups, AI Assist
 - **Canvas**: Drop zone empty state with keyboard shortcut hints, drag overlay for PDF drop
-- **Context menu**: Right-click on canvas for annotation actions (copy, paste, delete, z-order, deselect, quick tool switch)
+- **Context menu**: Right-click on canvas for annotation actions (copy, paste, delete, z-order, deselect, quick tool switch) with full arrow-key keyboard navigation
 - **Tooltips**: Delayed hover tooltips with keyboard shortcut badges on all TopBar and ToolRail buttons
 - **Loading indicator**: Animated progress bar during PDF operations
 - **Command palette**: Fuzzy-search commands via Cmd+K / Ctrl+K (includes migrated toolbar actions)
 - **Status bar**: Shows active tool, locked state, Cmd+K hint, and error emphasis styling
-- **Accessibility**: `prefers-reduced-motion` support, focus-visible indicators, no outline suppression, comprehensive ARIA labels across all interactive elements
+- **Accessibility**: `prefers-reduced-motion` support, focus-visible indicators, no outline suppression, comprehensive ARIA labels, keyboard-navigable context menus, `aria-selected`/`aria-controls` on tab panels, keyboard-accessible resize handles
 - **Responsive**: Compact tool rail at 980px, overlay sidebars at 768px
 
 ### Viewer Controls
@@ -64,7 +64,7 @@ Access app live at: https://mjamiv.github.io/kpdf/
 - **Clipboard**: Copy (Cmd+C), Paste (Cmd+V), Duplicate (Cmd+D)
 - **Arrow-key nudge**: 1px (or 10px with Shift) for precise positioning
 - Transform operations: move, resize (with Shift-proportional), rotate, z-order
-- **Resize handle hover states**: handles grow and glow on hover
+- **Resize handle hover states**: handles grow and glow on hover, keyboard-accessible with arrow keys (Shift for fine-grained)
 - Snapping/alignment guides with visual guide lines during move/resize
 
 ### Persistence (3-tier)
@@ -107,7 +107,7 @@ Access app live at: https://mjamiv.github.io/kpdf/
 - `pdfjs-dist` for rendering
 - `pdf-lib` for export + PDF attachment embedding (lazy-loaded)
 - `perfect-freehand` for variable-width pen strokes
-- `vitest` for unit tests (**585 tests**)
+- `vitest` for unit tests (**624 tests**)
 
 ## Run
 ```bash
@@ -119,7 +119,7 @@ Open the Vite URL (usually `http://localhost:5173`).
 ## Quality Checks
 ```bash
 npm run lint        # ESLint
-npm run test        # 585 vitest tests
+npm run test        # 624 vitest tests
 npm run build       # TypeScript + Vite production build
 ```
 
