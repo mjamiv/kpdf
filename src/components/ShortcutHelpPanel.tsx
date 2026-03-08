@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { TOOL_SHORTCUTS } from '../tools/shortcuts';
 
 type ShortcutHelpPanelProps = {
@@ -6,6 +7,15 @@ type ShortcutHelpPanelProps = {
 };
 
 export default function ShortcutHelpPanel({ visible, onClose }: ShortcutHelpPanelProps) {
+  useEffect(() => {
+    if (!visible) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [visible, onClose]);
+
   if (!visible) return null;
 
   return (

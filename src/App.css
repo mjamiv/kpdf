@@ -128,6 +128,16 @@
   width: 30px;
   height: 30px;
   padding: 0;
+  transition: background 100ms ease, color 100ms ease, transform 60ms ease;
+}
+
+.top-bar-btn:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.top-bar-btn:active {
+  transform: scale(0.95);
 }
 
 .top-bar-btn.fit-btn {
@@ -226,7 +236,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  border-radius: 3px;
+  border-radius: var(--kpdf-radius-control);
   transition: color 100ms ease;
 }
 .rail-group-toggle:hover {
@@ -794,7 +804,7 @@ select:focus-visible,
   font-size: 0.65rem;
   background: var(--surface-2);
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: var(--kpdf-radius-control);
   margin-right: 2px;
 }
 
@@ -832,7 +842,7 @@ select:focus-visible,
   color: var(--text);
   background: var(--surface-1);
   padding: 1px 6px;
-  border-radius: 3px;
+  border-radius: var(--kpdf-radius-control);
   font-variant-numeric: tabular-nums;
 }
 
@@ -843,7 +853,7 @@ select:focus-visible,
   background: var(--surface-1);
   border: 1px solid var(--line);
   padding: 1px 6px;
-  border-radius: 3px;
+  border-radius: var(--kpdf-radius-control);
 }
 
 /* ─── Tab bar ──────────────────────────────────────────────── */
@@ -963,7 +973,7 @@ select:focus-visible,
 .shortcut-panel kbd {
   background: var(--surface-3);
   border: 1px solid var(--line-strong);
-  border-radius: 4px;
+  border-radius: var(--kpdf-radius-control);
   padding: 2px 7px;
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.75rem;
@@ -990,6 +1000,18 @@ select:focus-visible,
   border-radius: 2px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
   pointer-events: auto;
+}
+
+.selection-handle:focus-visible {
+  outline: 2px solid var(--kpdf-info);
+  outline-offset: 1px;
+  box-shadow: 0 0 6px var(--accent-glow);
+}
+
+.context-menu-item:focus-visible {
+  outline: 2px solid var(--kpdf-info);
+  outline-offset: -2px;
+  background: var(--surface-2);
 }
 
 /* ─── Comments panel ───────────────────────────────────────── */
@@ -1074,7 +1096,7 @@ select:focus-visible,
 }
 
 .comment-status {
-  border-radius: 3px;
+  border-radius: var(--kpdf-radius-control);
   padding: 0 5px;
   font-weight: 600;
   font-size: 0.65rem;
@@ -1181,7 +1203,7 @@ select:focus-visible,
   height: auto;
   padding: 0.15rem 0.4rem;
   font-size: 0.68rem;
-  border-radius: 4px;
+  border-radius: var(--kpdf-radius-control);
 }
 .thread-resolve-btn {
   color: var(--success);
@@ -1222,7 +1244,7 @@ select:focus-visible,
   height: auto;
   padding: 0.1rem 0.35rem;
   font-size: 0.68rem;
-  border-radius: 4px;
+  border-radius: var(--kpdf-radius-control);
   color: var(--muted);
 }
 .thread-reply-form {
@@ -1513,7 +1535,7 @@ select:focus-visible,
   display: inline-block;
   width: 12px;
   height: 12px;
-  border-radius: 3px;
+  border-radius: var(--kpdf-radius-control);
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
 }
@@ -1533,7 +1555,7 @@ select:focus-visible,
   font-size: 0.72rem;
   padding: 0.15rem 0.3rem;
   border: 1px solid var(--accent);
-  border-radius: 4px;
+  border-radius: var(--kpdf-radius-control);
   background: var(--surface-0);
   color: var(--text);
   font-family: var(--kpdf-font-ui, "IBM Plex Mono", monospace);
@@ -1566,7 +1588,7 @@ select:focus-visible,
   font-size: 0.68rem;
   white-space: nowrap;
   cursor: pointer;
-  border-radius: 3px;
+  border-radius: var(--kpdf-radius-control);
   color: var(--text-secondary);
   transition: background 80ms ease;
 }
@@ -1710,7 +1732,7 @@ select:focus-visible,
   display: inline-block;
   padding: 0.15rem 0.5rem;
   border: 2px solid;
-  border-radius: 3px;
+  border-radius: var(--kpdf-radius-control);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -1875,7 +1897,7 @@ select:focus-visible,
 .tool-preset-swatch {
   width: 12px;
   height: 12px;
-  border-radius: 3px;
+  border-radius: var(--kpdf-radius-control);
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 .tool-preset-name {
@@ -1965,7 +1987,7 @@ select:focus-visible,
   width: 100%;
   padding: 0.4rem 0.6rem;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--kpdf-radius-control);
   background: none;
   color: var(--text);
   font-size: var(--kpdf-text-13, 13px);
@@ -2010,7 +2032,7 @@ select:focus-visible,
   padding: 4px 8px;
   background: var(--kpdf-ink-strong, #111317);
   border: 1px solid transparent;
-  border-radius: 5px;
+  border-radius: var(--kpdf-radius-control);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
   pointer-events: none;
   animation: tooltipIn 120ms var(--ease-out);
@@ -2032,7 +2054,7 @@ select:focus-visible,
   color: rgba(236, 236, 236, 0.7);
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 3px;
+  border-radius: var(--kpdf-radius-control);
   padding: 1px 4px;
 }
 
@@ -2083,7 +2105,7 @@ select:focus-visible,
   .page-wrap,
   .pdf-canvas,
   .overlay-canvas {
-    border-radius: 4px;
+    border-radius: var(--kpdf-radius-control);
   }
 }
 

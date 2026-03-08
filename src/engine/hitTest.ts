@@ -178,6 +178,8 @@ export function pointInAnnotation(point: Point, annotation: Annotation, toleranc
       const dy = point.y - annotation.y;
       return Math.sqrt(dx * dx + dy * dy) < annotation.radius + tolerance;
     }
+    default:
+      return false;
   }
 }
 

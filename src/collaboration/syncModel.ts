@@ -25,11 +25,22 @@ export type PresenceInfo = {
   users: CollaborationState[];
 };
 
+/**
+ * Data payload for sync operations. Extends Partial<Annotation> with
+ * special fields for move, resize, and z-order operations that don't
+ * map directly to annotation properties.
+ */
+export type SyncOperationData = Partial<Annotation> & {
+  _move?: { dx: number; dy: number };
+  _resize?: { anchor: string; dx: number; dy: number };
+  _zOrder?: string;
+};
+
 export type SyncOperation = {
   type: 'add' | 'update' | 'remove';
   annotationId: string;
   page: number;
-  data?: Partial<Annotation>;
+  data?: SyncOperationData;
   timestamp: string;
   userId: string;
 };
@@ -67,7 +78,7 @@ export function actionToSyncOps(action: Action, userId: string): SyncOperation[]
         type: 'add',
         annotationId: action.annotation.id,
         page: action.page,
-        data: action.annotation as Partial<Annotation>,
+        data: action.annotation as SyncOperationData,
         timestamp: now,
         userId,
       }];
@@ -86,7 +97,7 @@ export function actionToSyncOps(action: Action, userId: string): SyncOperation[]
         type: 'update',
         annotationId: action.id,
         page: action.page,
-        data: action.patch as Partial<Annotation>,
+        data: action.patch as SyncOperationData,
         timestamp: now,
         userId,
       }];
@@ -96,7 +107,7 @@ export function actionToSyncOps(action: Action, userId: string): SyncOperation[]
         type: 'update',
         annotationId: action.id,
         page: action.page,
-        data: { _move: { dx: action.dx, dy: action.dy } } as unknown as Partial<Annotation>,
+        data: { _move: { dx: action.dx, dy: action.dy } },
         timestamp: now,
         userId,
       }];
@@ -106,7 +117,7 @@ export function actionToSyncOps(action: Action, userId: string): SyncOperation[]
         type: 'update',
         annotationId: action.id,
         page: action.page,
-        data: { _resize: { anchor: action.anchor, dx: action.dx, dy: action.dy } } as unknown as Partial<Annotation>,
+        data: { _resize: { anchor: action.anchor, dx: action.dx, dy: action.dy } },
         timestamp: now,
         userId,
       }];
@@ -116,7 +127,7 @@ export function actionToSyncOps(action: Action, userId: string): SyncOperation[]
         type: 'update',
         annotationId: action.id,
         page: action.page,
-        data: { rotation: action.angle } as Partial<Annotation>,
+        data: { rotation: action.angle },
         timestamp: now,
         userId,
       }];
@@ -126,7 +137,7 @@ export function actionToSyncOps(action: Action, userId: string): SyncOperation[]
         type: 'update',
         annotationId: action.id,
         page: action.page,
-        data: { locked: action.locked } as Partial<Annotation>,
+        data: { locked: action.locked },
         timestamp: now,
         userId,
       }];
@@ -136,7 +147,7 @@ export function actionToSyncOps(action: Action, userId: string): SyncOperation[]
         type: 'update',
         annotationId: action.id,
         page: action.page,
-        data: { _zOrder: action.op } as unknown as Partial<Annotation>,
+        data: { _zOrder: action.op },
         timestamp: now,
         userId,
       }];
@@ -160,7 +171,7 @@ export function actionToSyncOps(action: Action, userId: string): SyncOperation[]
         type: 'add' as const,
         annotationId: ann.id,
         page: action.page,
-        data: ann as Partial<Annotation>,
+        data: ann as SyncOperationData,
         timestamp: now,
         userId,
       }));
@@ -172,7 +183,7 @@ export function actionToSyncOps(action: Action, userId: string): SyncOperation[]
           type: 'add' as const,
           annotationId: ann.id,
           page: Number(pageStr),
-          data: ann as Partial<Annotation>,
+          data: ann as SyncOperationData,
           timestamp: now,
           userId,
         })),
@@ -209,7 +220,7 @@ export function syncOpsToAction(ops: SyncOperation[]): Action {
           type: 'UPDATE_ANNOTATION',
           page: op.page,
           id: op.annotationId,
-          patch: op.data as Partial<Annotation>,
+          patch: op.data as SyncOperationData,
         };
     }
   }
@@ -234,7 +245,7 @@ export function syncOpsToAction(ops: SyncOperation[]): Action {
           type: 'UPDATE_ANNOTATION' as const,
           page: op.page,
           id: op.annotationId,
-          patch: op.data as Partial<Annotation>,
+          patch: op.data as SyncOperationData,
         };
     }
   });

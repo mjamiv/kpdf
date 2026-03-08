@@ -19,7 +19,7 @@
  *   });
  */
 
-import { useState, useEffect, useCallback, type RefObject } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, type RefObject } from 'react';
 
 export type UseVirtualScrollOptions = {
   totalItems: number;
@@ -77,7 +77,7 @@ export function useVirtualScroll(options: UseVirtualScrollOptions): VirtualScrol
     end: Math.min(totalItems, 3),
   });
 
-  const offsets = computeItemOffsets(totalItems, itemHeight);
+  const offsets = useMemo(() => computeItemOffsets(totalItems, itemHeight), [totalItems, itemHeight]);
   const totalHeight = offsets[totalItems] ?? 0;
   const offsetTop = offsets[visibleRange.start] ?? 0;
 
@@ -106,28 +106,28 @@ export function useVirtualScroll(options: UseVirtualScrollOptions): VirtualScrol
     });
   }, [containerRef, totalItems, itemHeight, overscan]);
 
+  const calcRangeRef = useRef(calculateVisibleRange);
+  useEffect(() => { calcRangeRef.current = calculateVisibleRange; });
+
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    calculateVisibleRange();
+    calcRangeRef.current();
 
-    const handleScroll = () => {
-      calculateVisibleRange();
-    };
+    const handleScroll = () => { calcRangeRef.current(); };
+    const handleResize = () => { calcRangeRef.current(); };
 
     container.addEventListener('scroll', handleScroll, { passive: true });
 
-    const observer = new ResizeObserver(() => {
-      calculateVisibleRange();
-    });
+    const observer = new ResizeObserver(handleResize);
     observer.observe(container);
 
     return () => {
       container.removeEventListener('scroll', handleScroll);
       observer.disconnect();
     };
-  }, [containerRef, calculateVisibleRange]);
+  }, [containerRef]);
 
   const scrollToItem = useCallback(
     (index: number) => {

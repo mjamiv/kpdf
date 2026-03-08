@@ -10,6 +10,7 @@ type SelectionHandlesProps = {
   canvasHeight: number;
   canvasRect: DOMRect | null;
   onHandleDown: (anchor: AnchorPosition, e: React.PointerEvent) => void;
+  onKeyboardResize?: (anchor: AnchorPosition, dx: number, dy: number) => void;
 };
 
 const anchorCursors: Record<AnchorPosition, string> = {
@@ -23,6 +24,17 @@ const anchorCursors: Record<AnchorPosition, string> = {
   w: 'ew-resize',
 };
 
+const anchorLabels: Record<AnchorPosition, string> = {
+  nw: 'Resize top-left corner',
+  n: 'Resize top edge',
+  ne: 'Resize top-right corner',
+  e: 'Resize right edge',
+  se: 'Resize bottom-right corner',
+  s: 'Resize bottom edge',
+  sw: 'Resize bottom-left corner',
+  w: 'Resize left edge',
+};
+
 export default function SelectionHandles({
   selection,
   annotations,
@@ -30,6 +42,7 @@ export default function SelectionHandles({
   canvasHeight,
   canvasRect,
   onHandleDown,
+  onKeyboardResize,
 }: SelectionHandlesProps) {
   const [hoveredHandle, setHoveredHandle] = useState<AnchorPosition | null>(null);
 
@@ -72,6 +85,9 @@ export default function SelectionHandles({
         <div
           key={anchor}
           className="selection-handle"
+          tabIndex={0}
+          role="button"
+          aria-label={anchorLabels[anchor]}
           style={{
             left: x,
             top: y,
@@ -91,6 +107,20 @@ export default function SelectionHandles({
           onPointerDown={(e) => {
             e.stopPropagation();
             onHandleDown(anchor, e);
+          }}
+          onKeyDown={(e) => {
+            if (!onKeyboardResize) return;
+            const step = e.shiftKey ? 0.001 : 0.005;
+            let dx = 0, dy = 0;
+            switch (e.key) {
+              case 'ArrowLeft': dx = -step; break;
+              case 'ArrowRight': dx = step; break;
+              case 'ArrowUp': dy = -step; break;
+              case 'ArrowDown': dy = step; break;
+              default: return;
+            }
+            e.preventDefault();
+            onKeyboardResize(anchor, dx, dy);
           }}
         />
       ))}

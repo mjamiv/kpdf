@@ -381,21 +381,37 @@ export default function App() {
     [annotationsByPage, pageNumber],
   );
 
-  // Render annotations
+  const annotationMap = useMemo(
+    () => new Map(currentAnnotations.map((a) => [a.id, a])),
+    [currentAnnotations],
+  );
+
+  // Render annotations (RAF-throttled)
+  const overlayRafRef = useRef<number | null>(null);
   useEffect(() => {
     const overlay = overlayCanvasRef.current;
     if (!overlay) return;
-    drawAnnotations(overlay, currentAnnotations, draft, tool, selection.ids);
+    if (overlayRafRef.current) cancelAnimationFrame(overlayRafRef.current);
+    overlayRafRef.current = requestAnimationFrame(() => {
+      drawAnnotations(overlay, currentAnnotations, draft, tool, selection.ids);
+      overlayRafRef.current = null;
+    });
+    return () => { if (overlayRafRef.current) cancelAnimationFrame(overlayRafRef.current); };
   }, [currentAnnotations, draft, tool, selection.ids]);
 
-  // Autosave to localStorage
+  // Autosave to localStorage (debounced)
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!pdfDoc || !documentFingerprint) return;
-    const doc = createAnnotationDocument(annotationsByPage, author, documentFingerprint);
-    saveAnnotationsToLocalStorage(documentFingerprint, doc);
     if (activeTabId) {
       setTabs((prev) => prev.map((t) => t.id === activeTabId ? { ...t, annotationsByPage } : t));
     }
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = setTimeout(() => {
+      const doc = createAnnotationDocument(annotationsByPage, author, documentFingerprint);
+      saveAnnotationsToLocalStorage(documentFingerprint, doc);
+    }, 1500);
+    return () => { if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current); };
   }, [annotationsByPage, author, documentFingerprint, pdfDoc, activeTabId]);
 
   // Render PDF page
@@ -785,7 +801,7 @@ export default function App() {
       if ((e.key === 'Delete' || e.key === 'Backspace') && selection.ids.size > 0) {
         e.preventDefault();
         for (const id of selection.ids) {
-          const ann = currentAnnotations.find((a) => a.id === id);
+          const ann = annotationMap.get(id);
           if (ann && !ann.locked) dispatch({ type: 'REMOVE_ANNOTATION', page: pageNumber, id, removed: ann });
         }
         setSelection(deselectAll());

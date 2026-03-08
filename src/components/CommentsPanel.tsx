@@ -34,11 +34,11 @@ export default function CommentsPanel({ visible, annotationsByPage, onJumpTo, on
         </button>
       </div>
       <div className="comments-filters">
-        <select value={filterAuthor} onChange={(e) => setFilterAuthor(e.target.value)}>
+        <select value={filterAuthor} onChange={(e) => setFilterAuthor(e.target.value)} aria-label="Filter by author">
           <option value="">All authors</option>
           {authors.map((a) => <option key={a} value={a}>{a}</option>)}
         </select>
-        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} aria-label="Filter by status">
           <option value="">All statuses</option>
           <option value="open">Open</option>
           <option value="resolved">Resolved</option>

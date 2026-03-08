@@ -57,6 +57,9 @@ function RightPanel(props: RightPanelProps) {
             key={t}
             className={`panel-tab${tab === t ? ' active' : ''}`}
             onClick={() => onSetTab(t)}
+            role="tab"
+            aria-selected={tab === t}
+            aria-controls={`panel-${t}`}
             aria-label={`${TAB_LABELS[t]} tab`}
           >
             {TAB_LABELS[t]}

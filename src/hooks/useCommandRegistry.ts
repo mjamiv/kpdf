@@ -60,217 +60,14 @@ export type CommandRegistryOptions = {
   toggleZoomWindow?: () => void;
 };
 
-export function useCommandRegistry(options: CommandRegistryOptions): CommandItem[] {
-  const {
-    setTool,
-    undo,
-    redo,
-    canUndo,
-    canRedo,
-    zoom,
-    setZoom,
-    currentPage,
-    pageCount,
-    setCurrentPage,
-    togglePanels,
-    exportAnnotations,
-    exportPdf,
-  } = options;
-
-  return useMemo(() => {
-    const commands: CommandItem[] = [];
-
-    for (const shortcut of TOOL_SHORTCUTS) {
-      commands.push({
-        id: `tool-${shortcut.tool}`,
-        label: `Tool: ${shortcut.label.replace(/ \(.\)$/, '')}`,
-        description: `Switch to ${shortcut.tool} tool`,
-        shortcut: shortcut.key.toUpperCase(),
-        category: 'tool',
-        action: () => setTool(shortcut.tool),
-      });
-
-      if (options.setLockedTool) {
-        const lockTool = options.setLockedTool;
-        commands.push({
-          id: `tool-${shortcut.tool}-lock`,
-          label: `Tool: ${shortcut.label.replace(/ \(.\)$/, '')} (Lock)`,
-          description: `Switch to ${shortcut.tool} tool and lock it`,
-          category: 'tool',
-          action: () => { setTool(shortcut.tool); lockTool(shortcut.tool); },
-        });
-      }
-    }
-
-    // Undo/Redo
-    commands.push({
-      id: 'action-undo',
-      label: 'Undo',
-      description: 'Undo the last action',
-      shortcut: 'Ctrl+Z',
-      category: 'action',
-      action: undo,
-      enabled: canUndo,
-    });
-
-    commands.push({
-      id: 'action-redo',
-      label: 'Redo',
-      description: 'Redo the last undone action',
-      shortcut: 'Ctrl+Shift+Z',
-      category: 'action',
-      action: redo,
-      enabled: canRedo,
-    });
-
-    // Zoom commands
-    commands.push({
-      id: 'view-zoom-in',
-      label: 'Zoom In',
-      description: `Current: ${Math.round(zoom * 100)}%`,
-      shortcut: 'Ctrl++',
-      category: 'view',
-      action: () => setZoom(Math.min(zoom * 1.25, 5)),
-    });
-
-    commands.push({
-      id: 'view-zoom-out',
-      label: 'Zoom Out',
-      description: `Current: ${Math.round(zoom * 100)}%`,
-      shortcut: 'Ctrl+-',
-      category: 'view',
-      action: () => setZoom(Math.max(zoom / 1.25, 0.25)),
-    });
-
-    commands.push({
-      id: 'view-zoom-fit',
-      label: 'Zoom to Fit',
-      description: 'Fit page to viewport',
-      category: 'view',
-      action: () => setZoom(1),
-    });
-
-    commands.push({
-      id: 'view-zoom-100',
-      label: 'Zoom to 100%',
-      description: 'Set zoom to actual size',
-      category: 'view',
-      action: () => setZoom(1),
-    });
-
-    // Page navigation
-    commands.push({
-      id: 'nav-prev-page',
-      label: 'Previous Page',
-      description: `Page ${currentPage} of ${pageCount}`,
-      category: 'navigation',
-      action: () => setCurrentPage(Math.max(1, currentPage - 1)),
-      enabled: currentPage > 1,
-    });
-
-    commands.push({
-      id: 'nav-next-page',
-      label: 'Next Page',
-      description: `Page ${currentPage} of ${pageCount}`,
-      category: 'navigation',
-      action: () => setCurrentPage(Math.min(pageCount, currentPage + 1)),
-      enabled: currentPage < pageCount,
-    });
-
-    commands.push({
-      id: 'nav-first-page',
-      label: 'Go to First Page',
-      category: 'navigation',
-      action: () => setCurrentPage(1),
-      enabled: currentPage > 1,
-    });
-
-    commands.push({
-      id: 'nav-last-page',
-      label: 'Go to Last Page',
-      category: 'navigation',
-      action: () => setCurrentPage(pageCount),
-      enabled: currentPage < pageCount,
-    });
-
-    // Panel toggles
-    if (togglePanels) {
-      for (const [name, toggle] of Object.entries(togglePanels)) {
-        commands.push({
-          id: `view-toggle-${name}`,
-          label: `Toggle ${name.charAt(0).toUpperCase() + name.slice(1)} Panel`,
-          description: `Show or hide the ${name} panel`,
-          category: 'view',
-          action: toggle,
-        });
-      }
-    }
-
-    // Extended commands (moved from toolbar)
-    if (options.clearPage) {
-      commands.push({ id: 'action-clear-page', label: 'Clear Page Annotations', description: 'Remove all annotations on current page', category: 'action', action: options.clearPage });
-    }
-    if (options.toggleReview) {
-      commands.push({ id: 'action-toggle-review', label: 'Toggle Review Mode', description: 'Enable/disable review mode', category: 'action', action: options.toggleReview });
-    }
-    if (options.toggleFlatten) {
-      commands.push({ id: 'action-toggle-flatten', label: 'Toggle Flatten on Save', description: 'Flatten annotations when saving', category: 'action', action: options.toggleFlatten });
-    }
-    if (options.importSidecar) {
-      commands.push({ id: 'import-sidecar', label: 'Import Sidecar JSON', description: 'Load annotations from sidecar file', category: 'export', action: options.importSidecar });
-    }
-    if (options.importXfdf) {
-      commands.push({ id: 'import-xfdf', label: 'Import XFDF', description: 'Import XFDF annotations', category: 'export', action: options.importXfdf });
-    }
-    if (options.exportXfdf) {
-      commands.push({ id: 'export-xfdf', label: 'Export XFDF', description: 'Export annotations as XFDF', category: 'export', action: options.exportXfdf });
-    }
-    if (options.toggleScaleCalibration) {
-      commands.push({ id: 'action-scale-calibration', label: 'Scale Calibration', description: 'Set measurement scale', category: 'action', action: options.toggleScaleCalibration });
-    }
-    if (options.toggleToolPresets) {
-      commands.push({ id: 'action-tool-presets', label: 'Tool Presets', description: 'Load discipline presets', category: 'action', action: options.toggleToolPresets });
-    }
-    if (options.toggleScrollZoom) {
-      commands.push({ id: 'action-scroll-zoom', label: 'Toggle Scroll-to-Zoom', description: 'Zoom on scroll without Ctrl', category: 'action', action: options.toggleScrollZoom });
-    }
-    if (options.toggleZoomWindow) {
-      commands.push({ id: 'view-zoom-window', label: 'Zoom Window', description: 'Draw a box to zoom into an area', shortcut: 'W', category: 'view', action: options.toggleZoomWindow });
-    }
-
-    // Export commands
-    if (exportAnnotations) {
-      commands.push({
-        id: 'export-annotations',
-        label: 'Export Annotations',
-        description: 'Export annotations as JSON',
-        category: 'export',
-        action: exportAnnotations,
-      });
-    }
-
-    if (exportPdf) {
-      commands.push({
-        id: 'export-pdf',
-        label: 'Export PDF',
-        description: 'Export document with annotations',
-        category: 'export',
-        action: exportPdf,
-      });
-    }
-
-    return commands;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [options]);
-}
-
 /**
- * Pure function version for building commands (useful for testing without hooks).
+ * Core command builder shared by both the hook and the pure function.
+ * Builds the full set of commands from options.
  */
-export function buildCommands(options: CommandRegistryOptions): CommandItem[] {
-  // Delegate to the same logic -- extracted for testability
+function buildCommandsCore(options: CommandRegistryOptions): CommandItem[] {
   const commands: CommandItem[] = [];
 
+  // Tool commands
   for (const shortcut of TOOL_SHORTCUTS) {
     commands.push({
       id: `tool-${shortcut.tool}`,
@@ -293,9 +90,11 @@ export function buildCommands(options: CommandRegistryOptions): CommandItem[] {
     }
   }
 
+  // Undo/Redo
   commands.push({
     id: 'action-undo',
     label: 'Undo',
+    description: 'Undo the last action',
     shortcut: 'Ctrl+Z',
     category: 'action',
     action: options.undo,
@@ -305,15 +104,18 @@ export function buildCommands(options: CommandRegistryOptions): CommandItem[] {
   commands.push({
     id: 'action-redo',
     label: 'Redo',
+    description: 'Redo the last undone action',
     shortcut: 'Ctrl+Shift+Z',
     category: 'action',
     action: options.redo,
     enabled: options.canRedo,
   });
 
+  // Zoom commands
   commands.push({
     id: 'view-zoom-in',
     label: 'Zoom In',
+    description: `Current: ${Math.round(options.zoom * 100)}%`,
     shortcut: 'Ctrl++',
     category: 'view',
     action: () => options.setZoom(Math.min(options.zoom * 1.25, 5)),
@@ -322,6 +124,7 @@ export function buildCommands(options: CommandRegistryOptions): CommandItem[] {
   commands.push({
     id: 'view-zoom-out',
     label: 'Zoom Out',
+    description: `Current: ${Math.round(options.zoom * 100)}%`,
     shortcut: 'Ctrl+-',
     category: 'view',
     action: () => options.setZoom(Math.max(options.zoom / 1.25, 0.25)),
@@ -330,13 +133,24 @@ export function buildCommands(options: CommandRegistryOptions): CommandItem[] {
   commands.push({
     id: 'view-zoom-fit',
     label: 'Zoom to Fit',
+    description: 'Fit page to viewport',
     category: 'view',
     action: () => options.setZoom(1),
   });
 
   commands.push({
+    id: 'view-zoom-100',
+    label: 'Zoom to 100%',
+    description: 'Set zoom to actual size',
+    category: 'view',
+    action: () => options.setZoom(1),
+  });
+
+  // Page navigation
+  commands.push({
     id: 'nav-prev-page',
     label: 'Previous Page',
+    description: `Page ${options.currentPage} of ${options.pageCount}`,
     category: 'navigation',
     action: () => options.setCurrentPage(Math.max(1, options.currentPage - 1)),
     enabled: options.currentPage > 1,
@@ -345,26 +159,79 @@ export function buildCommands(options: CommandRegistryOptions): CommandItem[] {
   commands.push({
     id: 'nav-next-page',
     label: 'Next Page',
+    description: `Page ${options.currentPage} of ${options.pageCount}`,
     category: 'navigation',
     action: () => options.setCurrentPage(Math.min(options.pageCount, options.currentPage + 1)),
     enabled: options.currentPage < options.pageCount,
   });
 
+  commands.push({
+    id: 'nav-first-page',
+    label: 'Go to First Page',
+    category: 'navigation',
+    action: () => options.setCurrentPage(1),
+    enabled: options.currentPage > 1,
+  });
+
+  commands.push({
+    id: 'nav-last-page',
+    label: 'Go to Last Page',
+    category: 'navigation',
+    action: () => options.setCurrentPage(options.pageCount),
+    enabled: options.currentPage < options.pageCount,
+  });
+
+  // Panel toggles
   if (options.togglePanels) {
     for (const [name, toggle] of Object.entries(options.togglePanels)) {
       commands.push({
         id: `view-toggle-${name}`,
         label: `Toggle ${name.charAt(0).toUpperCase() + name.slice(1)} Panel`,
+        description: `Show or hide the ${name} panel`,
         category: 'view',
         action: toggle,
       });
     }
   }
 
+  // Extended commands (moved from toolbar)
+  if (options.clearPage) {
+    commands.push({ id: 'action-clear-page', label: 'Clear Page Annotations', description: 'Remove all annotations on current page', category: 'action', action: options.clearPage });
+  }
+  if (options.toggleReview) {
+    commands.push({ id: 'action-toggle-review', label: 'Toggle Review Mode', description: 'Enable/disable review mode', category: 'action', action: options.toggleReview });
+  }
+  if (options.toggleFlatten) {
+    commands.push({ id: 'action-toggle-flatten', label: 'Toggle Flatten on Save', description: 'Flatten annotations when saving', category: 'action', action: options.toggleFlatten });
+  }
+  if (options.importSidecar) {
+    commands.push({ id: 'import-sidecar', label: 'Import Sidecar JSON', description: 'Load annotations from sidecar file', category: 'export', action: options.importSidecar });
+  }
+  if (options.importXfdf) {
+    commands.push({ id: 'import-xfdf', label: 'Import XFDF', description: 'Import XFDF annotations', category: 'export', action: options.importXfdf });
+  }
+  if (options.exportXfdf) {
+    commands.push({ id: 'export-xfdf', label: 'Export XFDF', description: 'Export annotations as XFDF', category: 'export', action: options.exportXfdf });
+  }
+  if (options.toggleScaleCalibration) {
+    commands.push({ id: 'action-scale-calibration', label: 'Scale Calibration', description: 'Set measurement scale', category: 'action', action: options.toggleScaleCalibration });
+  }
+  if (options.toggleToolPresets) {
+    commands.push({ id: 'action-tool-presets', label: 'Tool Presets', description: 'Load discipline presets', category: 'action', action: options.toggleToolPresets });
+  }
+  if (options.toggleScrollZoom) {
+    commands.push({ id: 'action-scroll-zoom', label: 'Toggle Scroll-to-Zoom', description: 'Zoom on scroll without Ctrl', category: 'action', action: options.toggleScrollZoom });
+  }
+  if (options.toggleZoomWindow) {
+    commands.push({ id: 'view-zoom-window', label: 'Zoom Window', description: 'Draw a box to zoom into an area', shortcut: 'W', category: 'view', action: options.toggleZoomWindow });
+  }
+
+  // Export commands
   if (options.exportAnnotations) {
     commands.push({
       id: 'export-annotations',
       label: 'Export Annotations',
+      description: 'Export annotations as JSON',
       category: 'export',
       action: options.exportAnnotations,
     });
@@ -374,10 +241,22 @@ export function buildCommands(options: CommandRegistryOptions): CommandItem[] {
     commands.push({
       id: 'export-pdf',
       label: 'Export PDF',
+      description: 'Export document with annotations',
       category: 'export',
       action: options.exportPdf,
     });
   }
 
   return commands;
+}
+
+export function useCommandRegistry(options: CommandRegistryOptions): CommandItem[] {
+  return useMemo(() => buildCommandsCore(options), [options]);
+}
+
+/**
+ * Pure function version for building commands (useful for testing without hooks).
+ */
+export function buildCommands(options: CommandRegistryOptions): CommandItem[] {
+  return buildCommandsCore(options);
 }

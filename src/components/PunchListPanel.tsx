@@ -137,19 +137,19 @@ export default function PunchListPanel({
 
       {/* Filter bar */}
       <div className="punch-list-filters">
-        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} aria-label="Filter by status">
           <option value="">All statuses</option>
           {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
-        <select value={filterAssignee} onChange={(e) => setFilterAssignee(e.target.value)}>
+        <select value={filterAssignee} onChange={(e) => setFilterAssignee(e.target.value)} aria-label="Filter by assignee">
           <option value="">All assignees</option>
           {assignees.map((a) => <option key={a} value={a}>{a}</option>)}
         </select>
-        <select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)}>
+        <select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} aria-label="Filter by priority">
           <option value="">All priorities</option>
           {PRIORITY_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
         </select>
-        <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
+        <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} aria-label="Filter by category">
           <option value="">All categories</option>
           {categories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>

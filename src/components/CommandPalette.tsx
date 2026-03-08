@@ -256,7 +256,6 @@ export function CommandPalette({ commands, isOpen, onClose, onExecute }: Command
             style={{
               width: '100%',
               border: 'none',
-              outline: 'none',
               fontSize: 16,
               padding: '4px 0',
               backgroundColor: 'transparent',
