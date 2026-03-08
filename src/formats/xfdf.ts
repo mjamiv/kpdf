@@ -29,6 +29,7 @@
 
 import type { Annotation, AnnotationsByPage, Point } from '../types';
 import { randomId } from '../engine/utils';
+import { ensureKnee } from '../engine/calloutGeometry';
 
 // Default PDF page dimensions in points (US Letter)
 const DEFAULT_PAGE_WIDTH = 612;
@@ -172,7 +173,13 @@ function annotationToXfdf(
       const box = ann.box;
       const rect = toXfdfRect(box.x, box.y, box.width, box.height, pageWidth, pageHeight);
       const fontSize = ann.fontSize * pageWidth;
-      return `<freetext ${common} rect="${rect}" size="${fmt(fontSize)}" callout="true">${escapeXml(ann.text)}</freetext>`;
+      const knee = ensureKnee(ann.leaderTarget, ann.box, ann.knee);
+      const ax = fmt(toXfdfX(ann.leaderTarget.x, pageWidth));
+      const ay = fmt(toXfdfY(ann.leaderTarget.y, pageHeight));
+      const kx = fmt(toXfdfX(knee.x, pageWidth));
+      const ky = fmt(toXfdfY(knee.y, pageHeight));
+      const calloutLine = `${ax},${ay},${kx},${ky}`;
+      return `<freetext ${common} rect="${rect}" size="${fmt(fontSize)}" callout="true" callout-line="${calloutLine}">${escapeXml(ann.text)}</freetext>`;
     }
 
     case 'cloud': {

@@ -8,7 +8,7 @@ Access app live at: https://mjamiv.github.io/kpdf/
 
 ### Markup Tools (18 tools)
 - **Basic**: Select, Pen (variable-width), Rectangle, Highlight, Text, Ellipse
-- **Shapes**: Arrow, Callout, Cloud, Polygon, Polyline
+- **Shapes**: Arrow, Callout (3-point: anchor dot → knee → text box), Cloud, Polygon, Polyline
 - **AEC**: Measurement, Area, Angle, Count, Dimension
 - **Other**: Stamp (with custom stamp library), Hyperlink (cross-page links)
 
@@ -107,7 +107,7 @@ Access app live at: https://mjamiv.github.io/kpdf/
 - `pdfjs-dist` for rendering
 - `pdf-lib` for export + PDF attachment embedding (lazy-loaded)
 - `perfect-freehand` for variable-width pen strokes
-- `vitest` for unit tests (**624 tests**)
+- `vitest` for unit tests (**643 tests**)
 
 ## Run
 ```bash
@@ -119,7 +119,7 @@ Open the Vite URL (usually `http://localhost:5173`).
 ## Quality Checks
 ```bash
 npm run lint        # ESLint
-npm run test        # 624 vitest tests
+npm run test        # 643 vitest tests
 npm run build       # TypeScript + Vite production build
 ```
 
@@ -140,6 +140,7 @@ src/
     actions.ts, state.ts     # Reducer actions and state management
     history.ts               # Undo/redo stack
     hitTest.ts               # Point-in-annotation testing
+    calloutGeometry.ts       # Callout leader line geometry (box edge anchor, knee)
     selection.ts             # Multi-select state
     transforms.ts            # Move, resize, rotate
     utils.ts                 # Shared utilities

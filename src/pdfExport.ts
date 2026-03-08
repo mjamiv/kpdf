@@ -1,6 +1,7 @@
 import type { PDFDocument as PDFDocumentType, PDFPage } from 'pdf-lib';
 import type { Annotation, Point } from './types';
 import { clamp01 } from './engine/utils';
+import { computeBoxEdgeAnchor, ensureKnee } from './engine/calloutGeometry';
 
 const EPSILON = 1e-6;
 
@@ -173,17 +174,22 @@ async function drawAnnotations(
           opacity: 0,
         });
 
-        const boxCenter = toPdfPoint(
-          { x: box.x + box.width / 2, y: box.y + box.height / 2 },
-          width,
-          height,
-        );
-        const leader = toPdfPoint(annotation.leaderTarget, width, height);
-        page.drawLine({ start: boxCenter, end: leader, thickness: 1, color });
+        // Leader line: anchor → knee → box edge
+        const knee = ensureKnee(annotation.leaderTarget, annotation.box, annotation.knee);
+        const edgePt = computeBoxEdgeAnchor(knee, annotation.box);
+        const anchorPdf = toPdfPoint(annotation.leaderTarget, width, height);
+        const kneePdf = toPdfPoint(knee, width, height);
+        const edgePdf = toPdfPoint(edgePt, width, height);
+
+        page.drawLine({ start: anchorPdf, end: kneePdf, thickness: 1, color });
+        page.drawLine({ start: kneePdf, end: edgePdf, thickness: 1, color });
+
+        // Anchor dot
+        page.drawCircle({ x: anchorPdf.x, y: anchorPdf.y, size: 3, color });
 
         const textSize = Math.max(annotation.fontSize * width, 8);
         page.drawText(annotation.text, {
-          x: cX + 2,
+          x: cX + 4,
           y: cY + cH / 2 - textSize / 2,
           color,
           size: textSize,

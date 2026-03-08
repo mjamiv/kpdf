@@ -5,6 +5,24 @@ import { boundingBox } from '../engine/hitTest';
 import { isSelectDraft, type SelectDraft } from '../tools/selectTool';
 import { currentHoveredId } from '../tools/selectTool';
 import type { SnapGuide } from '../tools/snapping';
+import { computeBoxEdgeAnchor, ensureKnee } from '../engine/calloutGeometry';
+
+function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let current = '';
+  for (const word of words) {
+    const test = current ? `${current} ${word}` : word;
+    if (ctx.measureText(test).width > maxWidth && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = test;
+    }
+  }
+  if (current) lines.push(current);
+  return lines.length > 0 ? lines : [''];
+}
 
 function drawPen(ctx: CanvasRenderingContext2D, points: Point[], color: string, thickness: number, w: number, h: number, ox: number, oy: number) {
   if (points.length < 2) return;
@@ -194,13 +212,51 @@ export function drawAnnotations(
         break;
       case 'callout': {
         const bx = ann.box.x * w + ox, by = ann.box.y * h + oy, bw = ann.box.width * w, bh = ann.box.height * h;
+        const lineW = Math.max(0.0025 * w, 1.5);
+        const knee = ensureKnee(ann.leaderTarget, ann.box, ann.knee);
+        const edgePt = computeBoxEdgeAnchor(knee, ann.box);
+
+        // Text box
         ctx.strokeStyle = ann.color;
-        ctx.lineWidth = Math.max(0.0025 * w, 1.5);
+        ctx.lineWidth = lineW;
         ctx.strokeRect(bx, by, bw, bh);
-        ctx.beginPath(); ctx.moveTo(bx, by + bh / 2); ctx.lineTo(ann.leaderTarget.x * w + ox, ann.leaderTarget.y * h + oy); ctx.stroke();
+
+        // Leader: anchor → knee → box edge
+        const anchorX = ann.leaderTarget.x * w + ox;
+        const anchorY = ann.leaderTarget.y * h + oy;
+        const kneeX = knee.x * w + ox;
+        const kneeY = knee.y * h + oy;
+        const edgeX = edgePt.x * w + ox;
+        const edgeY = edgePt.y * h + oy;
+
+        ctx.beginPath();
+        ctx.moveTo(anchorX, anchorY);
+        ctx.lineTo(kneeX, kneeY);
+        ctx.lineTo(edgeX, edgeY);
+        ctx.stroke();
+
+        // Anchor dot (filled circle)
+        const dotRadius = Math.max(lineW * 2.5, 4);
         ctx.fillStyle = ann.color;
-        ctx.font = `${Math.max(10, ann.fontSize * w)}px ui-sans-serif, system-ui`;
-        ctx.fillText(ann.text, bx + 4, by + bh / 2 + 4, bw - 8);
+        ctx.beginPath();
+        ctx.arc(anchorX, anchorY, dotRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Text inside box
+        ctx.fillStyle = ann.color;
+        const fontSize = Math.max(10, ann.fontSize * w);
+        ctx.font = `${fontSize}px ui-sans-serif, system-ui`;
+        const textPad = 6;
+        const maxTextW = bw - textPad * 2;
+        if (maxTextW > 0) {
+          const lines = wrapText(ctx, ann.text, maxTextW);
+          const lineHeight = fontSize * 1.25;
+          const totalHeight = lines.length * lineHeight;
+          const startY = by + (bh - totalHeight) / 2 + fontSize;
+          for (let i = 0; i < lines.length; i++) {
+            ctx.fillText(lines[i], bx + textPad, startY + i * lineHeight, maxTextW);
+          }
+        }
         break;
       }
     }

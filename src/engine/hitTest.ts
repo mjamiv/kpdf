@@ -1,5 +1,6 @@
 import type { Point, Annotation } from '../types';
 import { pointsBoundingBox } from './utils';
+import { computeBoxEdgeAnchor, ensureKnee } from './calloutGeometry';
 
 export function distanceToLineSegment(point: Point, a: Point, b: Point): number {
   const dx = b.x - a.x;
@@ -69,10 +70,11 @@ export function boundingBox(annotation: Annotation): { x: number; y: number; wid
       const by = annotation.box.y;
       const bx2 = bx + annotation.box.width;
       const by2 = by + annotation.box.height;
-      const minX = Math.min(bx, annotation.leaderTarget.x);
-      const minY = Math.min(by, annotation.leaderTarget.y);
-      const maxX = Math.max(bx2, annotation.leaderTarget.x);
-      const maxY = Math.max(by2, annotation.leaderTarget.y);
+      const knee = ensureKnee(annotation.leaderTarget, annotation.box, annotation.knee);
+      const minX = Math.min(bx, annotation.leaderTarget.x, knee.x);
+      const minY = Math.min(by, annotation.leaderTarget.y, knee.y);
+      const maxX = Math.max(bx2, annotation.leaderTarget.x, knee.x);
+      const maxY = Math.max(by2, annotation.leaderTarget.y, knee.y);
       return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
     }
     case 'angle': {
@@ -140,8 +142,15 @@ export function pointInAnnotation(point: Point, annotation: Annotation, toleranc
     case 'callout': {
       const box = annotation.box;
       if (pointInRect(point, box.x, box.y, box.width, box.height, tolerance)) return true;
-      const boxCenter: Point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-      return distanceToLineSegment(point, boxCenter, annotation.leaderTarget) < tolerance;
+      const knee = ensureKnee(annotation.leaderTarget, annotation.box, annotation.knee);
+      const edgePt = computeBoxEdgeAnchor(knee, annotation.box);
+      // Hit test anchor dot (generous radius)
+      const anchorDist = Math.sqrt((point.x - annotation.leaderTarget.x) ** 2 + (point.y - annotation.leaderTarget.y) ** 2);
+      if (anchorDist < tolerance * 1.5) return true;
+      // Hit test leader segments: anchor → knee, knee → box edge
+      if (distanceToLineSegment(point, annotation.leaderTarget, knee) < tolerance) return true;
+      if (distanceToLineSegment(point, knee, edgePt) < tolerance) return true;
+      return false;
     }
     case 'polygon':
     case 'area': {

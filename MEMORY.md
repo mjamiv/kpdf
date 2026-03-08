@@ -133,10 +133,20 @@ kpdf is a React + Vite + TypeScript PDF markup tool using `pdfjs-dist` for rende
 
 **Bonus**: Fixed pre-existing `clampZoom` test (2-decimal → 4-decimal expectation)
 
+### Callout Tool Refinement
+- Replaced simple 2-point callout with professional 3-point callout (anchor dot → knee → text box)
+- New type field: `knee: Point` on `CalloutAnnotation` (backward-compatible, auto-generated if missing)
+- 3-click creation flow: click anchor, click knee, drag text box
+- New `src/engine/calloutGeometry.ts`: `computeBoxEdgeAnchor()` ray-casts to find leader-to-box edge point, `ensureKnee()` for backward compat
+- Rendering: filled circle at anchor, two-segment leader (anchor→knee→box edge), text wraps inside box
+- Hit testing: tests both leader segments + anchor dot with generous radius
+- Updated across: rendering, hit test, bounding box, transforms, persistence, PDF export, XFDF export
+- 19 new tests (8 geometry + 11 tool behavior)
+
 ## Current State
 - Dev server: `npm run dev`
 - Lint: passing (0 errors, 3 pre-existing warnings)
-- Unit tests: **585 passing** (`npm test`)
+- Unit tests: **643 passing** (`npm test`)
 - Build: passing (`npm run build`)
 - pdfjs-dist is now code-split (loaded on first PDF open)
 

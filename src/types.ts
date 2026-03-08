@@ -57,6 +57,7 @@ export type CalloutAnnotation = BaseAnnotation & {
   type: 'callout';
   box: { x: number; y: number; width: number; height: number };
   leaderTarget: Point;
+  knee: Point;
   text: string;
   fontSize: number;
 };

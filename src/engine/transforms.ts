@@ -25,7 +25,7 @@ export function moveAnnotation(ann: Annotation, dx: number, dy: number): Annotat
     case 'dimension':
       return { ...ann, start: movePoint(ann.start, dx, dy), end: movePoint(ann.end, dx, dy) };
     case 'callout':
-      return { ...ann, box: { ...ann.box, x: clamp01(ann.box.x + dx), y: clamp01(ann.box.y + dy) }, leaderTarget: movePoint(ann.leaderTarget, dx, dy) };
+      return { ...ann, box: { ...ann.box, x: clamp01(ann.box.x + dx), y: clamp01(ann.box.y + dy) }, leaderTarget: movePoint(ann.leaderTarget, dx, dy), knee: movePoint(ann.knee, dx, dy) };
     case 'angle':
       return { ...ann, vertex: movePoint(ann.vertex, dx, dy), ray1: movePoint(ann.ray1, dx, dy), ray2: movePoint(ann.ray2, dx, dy) };
     case 'count':
